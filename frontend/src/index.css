@@ -1,0 +1,92 @@
+:root {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: #1f2328;
+  background: #f6f7f9;
+  --accent: #2563eb;
+  --border: #d9dde3;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+a { color: var(--accent); text-decoration: none; }
+
+button {
+  font: inherit;
+  padding: 0.4rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+}
+button:hover:not(:disabled) { background: #eef2f7; }
+button:disabled { opacity: 0.5; cursor: default; }
+button.primary { background: var(--accent); border-color: var(--accent); color: white; }
+button.primary:hover:not(:disabled) { background: #1d4ed8; }
+
+.app-header {
+  padding: 0.75rem 1.5rem;
+  background: white;
+  border-bottom: 1px solid var(--border);
+}
+.brand { font-weight: 700; font-size: 1.1rem; color: inherit; }
+
+main { max-width: 900px; margin: 0 auto; padding: 1.5rem; }
+
+.muted { color: #6b7280; font-size: 0.9rem; }
+.error { color: #b91c1c; background: #fef2f2; padding: 0.5rem 0.75rem; border-radius: 6px; }
+
+/* Document list */
+.doc-list-header { display: flex; justify-content: space-between; align-items: center; }
+.doc-list ul { list-style: none; padding: 0; }
+.doc-list li a {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.9rem 1rem;
+  margin-bottom: 0.5rem;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: inherit;
+}
+.doc-list li a:hover { border-color: var(--accent); }
+.doc-title { font-weight: 500; }
+
+/* Editor */
+.editor-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; }
+.back { white-space: nowrap; }
+.title-input {
+  flex: 1;
+  font: inherit;
+  font-size: 1.3rem;
+  font-weight: 600;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+}
+.title-input:hover, .title-input:focus { border-color: var(--border); background: white; outline: none; }
+.save-status { font-size: 0.85rem; color: #6b7280; white-space: nowrap; }
+.save-status.dirty { color: #b45309; }
+.save-status.error { color: #b91c1c; }
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.4rem;
+  background: white;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+}
+.toolbar button { padding: 0.3rem 0.6rem; min-width: 2.2rem; }
+.toolbar button.active { background: #dbeafe; border-color: var(--accent); }
+
+.editor {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 0 0 8px 8px;
+  min-height: 60vh;
+}
+.editor .tiptap { padding: 1.5rem 2rem; min-height: 60vh; outline: none; line-height: 1.6; }
+.editor .tiptap > :first-child { margin-top: 0; }
