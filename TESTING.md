@@ -5,7 +5,7 @@ This file tracks how the app is tested, which issues were found, and their statu
 ## How to run the automated checks
 
 ```bash
-# Backend: 26 API tests (documents + file import; in-memory DB, never touches app.db)
+# Backend: 55 API tests (documents, import, auth and sharing; in-memory DB, never touches app.db)
 cd backend && source .venv/bin/activate && pytest
 
 # Frontend: lint + type-check + production build
@@ -13,6 +13,39 @@ cd frontend && npm run lint && npm run build
 ```
 
 Browser end-to-end checks ran in headless Chrome (playwright-core) against the local dev servers. Those scripts aren't in the repo yet; see the follow-ups below.
+
+---
+
+## Round 3: 2026-11-22 (users and sharing)
+
+### What was tested
+
+| Layer | What | Result |
+|---|---|---|
+| Backend unit | 29 new tests in `tests/test_auth_sharing.py`: 401 on every protected endpoint; login email normalization, invalid emails, logout, a **tampered session cookie**; ownership of created and imported docs; owned vs. shared listing; **no access → 403**; **viewer can read, not edit**; **editor can edit, not manage shares**; sharing with multiple emails (deduplicated and normalized); **sharing with an email that has never signed in**, then that person signs in and sees the doc; re-sharing updates the role; role changes and revokes take effect immediately; sharing with yourself → 400; invalid share requests (empty, bad email, role `owner` or `admin`, more than 20 emails) → 422; share ids scoped to their document; seed data is idempotent | ✅ **55/55** in total |
+| Live API | curl with separate cookie jars for Alice, Bob and Carol: each sees the right docs and roles; a viewer's PATCH and an editor's share management return 403; the cookie is `HttpOnly` and `SameSite=Lax` | ✅ |
+| Browser E2E (sharing) | 23 checks across **four isolated browser sessions** (Alice, Bob, Carol, and a newcomer): the sign-in screen and deep-link redirect; one-click demo sign-in; email validation; My documents / Shared with me with owner and role badges; the share dialog (invalid email, multiple emails typed and pasted, role choice, change role, share with yourself, Esc to close); the editor can edit and sees the owner's label; the owner sees the editor's changes; the viewer gets a read-only editor with no toolbar, a read-only title, and no request on Cmd+S; **a forced API edit by the viewer → 403**; the newcomer signs in and sees the doc, and their name then appears in the owner's dialog; **revoking while the editor has the doc open** (the save fails clearly, then there's no access, and the doc disappears from their list); a direct URL with no access; sign-out with unsaved changes asks first; switching accounts; a cleared session returns to sign-in; mobile layout; compact list rows | ✅ **23/23** after fixes |
+| Regression | Round 1 core suite (21) and Round 2 import suite (16), updated to sign in first; lint, types, build; `npm audit` and `pip-audit` | ✅ 21/21, 16/16, no vulnerabilities |
+| Visual | Screenshots of sign-in, the list, the share dialog, the viewer mode, and the mobile dialog were reviewed by eye | ✅ after fix T17 |
+
+### Issues found
+
+| # | Severity | Issue | How found | Fix | Status |
+|---|---|---|---|---|---|
+| T17 | 🟠 Medium | **The "Can edit" badge was stretched to about 60% of the screen height** in "Shared with me". The badge class `editor` collided with the editor panel's `.editor { min-height: 60vh }`. | **Screenshot review**; the automated checks passed | Renamed to `badge-editor` and `badge-viewer`. Added a layout check that every list row stays under 100px tall. | ✅ Fixed |
+| T18 | 🟡 Low | **The share box could cut off emails early.** The first version turned text into a chip as soon as it exactly matched a known user, so typing `bob@example.com.au` would stop at `bob@example.com`. | Self code review, before testing | Only a real suggestion pick (an `insertReplacementText` input event) or a separator creates a chip. A browser test covers it. | ✅ Fixed |
+| T19 | 🟡 Low | The sign-in form showed the browser's native email tooltip instead of the app's styled error. | Browser E2E | `noValidate` on the form, so the app's own validation message is used. | ✅ Fixed |
+| T20 | ⚪ Info | First runs of the sharing suite had test-only failures: an ambiguous selector ("Access for carol" also matched "Remove access for carol"), which made two later checks fail too; data left over between runs; and reading the people list before it loaded. | Browser E2E | Exact selectors, unique emails per run, and waiting for data. | ✅ Fixed (tests only) |
+| T21 | ⚪ Info | Without `SECRET_KEY`, the server uses a random key, so everyone is signed out on restart, including on `--reload` during development. | By design | Documented. Set `SECRET_KEY` in any shared or deployed environment. | 📝 Documented |
+| T22 | ⚪ Info | Sign-in is simulated (no password), so anyone can act as any email. | By design (allowed by the brief) | Documented in the README security notes. Real auth would replace only `app/auth.py`. | 📝 Known limitation |
+
+### Manual checks for sharing
+1. Sign in as **Alice** and open **Welcome to Ajaia Docs**. Click **Share**: Bob is an Editor and Carol a Viewer.
+2. Type `dana@example.com`, press Enter, choose **Editor**, and click **Share**. Dana appears with "Hasn't signed in yet".
+3. **Sign out** (top right), then sign in as `dana@example.com` using the email box. The doc is under **Shared with me** with "Can edit", and you can edit it.
+4. Sign in as **Carol** and open the same doc. You see "View only", there's no toolbar, and typing does nothing.
+5. As Alice, change Carol to **Editor**. Carol can now edit after a refresh.
+6. As Alice, click **Remove** next to Bob. Bob gets "You don't have access to this document", and the doc disappears from his list.
 
 ---
 
@@ -105,5 +138,4 @@ Open **http://localhost:5173** with both servers running (see the README). Each 
 
 ## Follow-ups
 - Add the browser E2E checks to the repo as a proper Playwright test suite (`frontend/e2e/`) so anyone can run them.
-- Write tests alongside the sharing feature: owner vs. shared access, and a 403 for users without access.
 - Set an upload body-size limit at the hosting layer when deploying (T15).

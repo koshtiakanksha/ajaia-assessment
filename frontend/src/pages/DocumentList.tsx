@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api, IMPORT_EXTENSIONS, MAX_IMPORT_MB, validateImportFile, type DocumentSummary } from '../api'
+import Avatar from '../components/Avatar'
 
 export default function DocumentList() {
   const navigate = useNavigate()
@@ -69,7 +70,7 @@ export default function DocumentList() {
       }}
     >
       <div className="doc-list-header">
-        <h1>My documents</h1>
+        <h1>Documents</h1>
         <div className="actions">
           <button onClick={() => fileInput.current?.click()} disabled={busy !== null}>
             {busy === 'importing' ? 'Importing…' : '⬆ Import file'}
@@ -102,18 +103,22 @@ export default function DocumentList() {
         </p>
       )}
       {docs === null && !error && <p className="muted">Loading…</p>}
-      {docs?.length === 0 && <p className="muted">No documents yet. Create or import your first one!</p>}
 
-      <ul>
-        {docs?.map((doc) => (
-          <li key={doc.id}>
-            <Link to={`/docs/${doc.id}`}>
-              <span className="doc-title">{doc.title}</span>
-              <span className="muted">Edited {new Date(doc.updated_at).toLocaleString()}</span>
-            </Link>
-          </li>
-        ))}
-      </ul>
+      {docs && (
+        <>
+          <DocSection
+            title="My documents"
+            docs={docs.filter((d) => d.role === 'owner')}
+            empty="No documents yet. Create or import your first one!"
+          />
+          <DocSection
+            title="Shared with me"
+            docs={docs.filter((d) => d.role !== 'owner')}
+            empty="Nothing has been shared with you yet."
+            showOwner
+          />
+        </>
+      )}
 
       {dragging && (
         <div className="drop-overlay" aria-hidden="true">
@@ -122,4 +127,43 @@ export default function DocumentList() {
       )}
     </section>
   )
+}
+
+function DocSection({ title, docs, empty, showOwner = false }: {
+  title: string
+  docs: DocumentSummary[]
+  empty: string
+  showOwner?: boolean
+}) {
+  return (
+    <div className="doc-section" aria-label={title} role="region">
+      <h2>{title} <span className="count">{docs.length}</span></h2>
+      {docs.length === 0 ? (
+        <p className="muted empty">{empty}</p>
+      ) : (
+        <ul>
+          {docs.map((doc) => (
+            <li key={doc.id}>
+              <Link to={`/docs/${doc.id}`}>
+                <span className="doc-title">{doc.title}</span>
+                <span className="doc-meta">
+                  {showOwner && (
+                    <span className="owner" title={doc.owner.email}>
+                      <Avatar user={doc.owner} size={20} /> {doc.owner.name}
+                    </span>
+                  )}
+                  {showOwner && <RoleBadge role={doc.role} />}
+                  <span className="muted">Edited {new Date(doc.updated_at).toLocaleString()}</span>
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function RoleBadge({ role }: { role: DocumentSummary['role'] }) {
+  return <span className={`badge badge-${role}`}>{role === 'editor' ? 'Can edit' : 'View only'}</span>
 }

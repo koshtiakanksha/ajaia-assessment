@@ -134,6 +134,38 @@ Copy this template for each meaningful prompt or decision:
   - Used `mammoth` instead of `python-docx` for conversion, because it outputs clean semantic HTML directly. python-docx is used only to generate test fixtures.
 - **Result:** 26/26 pytest, 16/16 import browser checks, 21/21 core regression checks, lint, types and build clean, 0 known vulnerabilities in the new dependencies.
 
+### #8: Users and document sharing (Google Docs-style)
+- **Date:** 2026-11-22
+- **Prompt:** "Now users and document sharing. I want it to feel similar to Google Docs: share by email with multiple people, choose viewer or editor access, and revoke access. Use simulated login with a few seeded users for now, but design sharing so it isn't limited to them. Add My documents and Shared with me sections, enforce permissions on the backend, keep the UI clean and minimal, test everything, update the docs and push to GitHub."
+- **AI output:**
+  - **Data model:**
+    - `User` (unique email).
+    - `Document.owner_id`.
+    - `DocumentShare(document_id, email, role)`, unique per document and email.
+    - **Shares are keyed by email, not user id**, so you can share with people who have never signed in, and access appears on their first sign-in.
+  - **Auth** (`app/auth.py`): simulated sign-in with any email (the user is created on first sign-in) and three seeded demo users. A signed session cookie (Starlette `SessionMiddleware`, `HttpOnly`, `SameSite=Lax`, optionally `Secure`). `SECRET_KEY` comes from the environment, with a random per-process fallback, so no secret is in the repo.
+  - **Permissions** (`app/documents.py`): a single `load_document(..., need="view"|"edit"|"own")` helper returns 404, 403 with a specific message ("no access", "view-only", "only the owner can manage sharing"). Every endpoint uses it.
+  - **Share API:** list, add many at once (normalized and deduplicated, max 20, re-sharing updates the role, can't share with yourself), change role, revoke. Share ids are scoped to their document.
+  - **Seed data:** Alice's welcome doc (Bob is an editor, Carol a viewer) and Bob's notes (Alice is an editor), so every role can be demonstrated immediately.
+  - **Frontend:**
+    - `AuthGate` and a sign-in screen (demo accounts plus an email box).
+    - A header user menu with **Sign out**.
+    - **My documents** and **Shared with me** sections with owner avatars and **Can edit** / **View only** badges.
+    - A role-aware editor (viewers get a read-only editor with no toolbar and a read-only title; non-owners see "Owned by …").
+    - A **Share dialog**: email chips, typed or pasted, with known-user suggestions; a Viewer/Editor choice; a "People with access" list with role dropdowns and Remove; Esc or a click outside closes it.
+    - Signing out with unsaved changes asks first.
+  - **Tests:** 29 new pytest tests (55 in total). A 23-check multi-user browser suite with four isolated sessions. The earlier browser suites were updated to sign in first.
+- **Problems found and fixed:**
+  - A CSS class collision stretched the role badge to 60vh (`.badge.editor` picked up `.editor { min-height: 60vh }`). The automated checks passed; **I only caught it by reviewing the screenshots**. Renamed the classes and added a row-height layout check.
+  - The share box could auto-chip a partial email. I caught this in self-review before testing, and fixed it by only chipping on a real suggestion pick.
+  - The browser's native email validation replaced our styled error on sign-in.
+- **Decisions:**
+  - **Owner-only share management** (Google lets editors share by default). It's simpler to reason about and test, and easy to extend.
+  - **403 vs. 404:** a missing document is 404 and an existing document without access is 403, so the UI can say "You don't have access" like Google Docs. That reveals that the id exists, which is acceptable for an internal tool.
+  - **Login with any email** (not only seeded users), so "share with someone new, then they sign in" can actually be demonstrated.
+  - Kept the session cookie approach (no JWT or localStorage), so there's no token handling in JavaScript and the cookie is `HttpOnly`.
+- **Result:** 55/55 pytest; 23/23 sharing, 21/21 core and 16/16 import browser checks; lint, types and build clean; 0 known vulnerabilities.
+
 ---
 
 ## Key decisions (running summary)
@@ -143,7 +175,7 @@ Copy this template for each meaningful prompt or decision:
 | D1 | MVP = all five required areas from the brief, at the simplest version of each that works well | Everything in the brief is required, so the stretch work goes into "additional features" | Accepted |
 | D2 | "Collaboration" in the MVP = shared access, not real-time co-editing | Real-time editing (CRDTs, WebSockets) is high-risk within a timebox. TipTap keeps the upgrade path open | Accepted |
 | D3 | Store document content as server-sanitized HTML | Preserves formatting, works for all import formats, and prevents XSS | Implemented |
-| D4 | Simulated auth with seeded users | Allowed by the brief, and keeps the focus on ownership and sharing logic | Accepted (not built yet) |
+| D4 | Simulated auth with seeded users | Allowed by the brief, and keeps the focus on ownership and sharing logic | Implemented |
 | D5 | A single deployable service (FastAPI serves the React build) | One URL and no CORS setup in production, which makes deployment simpler | Accepted (deployment pending) |
 | D6 | Stack: FastAPI + SQLModel/SQLite, React + TypeScript + Vite, TipTap | Confirmed by the user in #3 | Implemented |
 | D7 | Backend runs on port 8001 in development; Vite forwards `/api` to it | Port 8000 is used by another local project | Implemented |
@@ -157,3 +189,8 @@ Copy this template for each meaningful prompt or decision:
 | D15 | Import creates a new document (`.txt`, `.md`, `.docx`, 5 MB max); files are converted, not stored | Simplest model, consistent with "New document", with no file storage to secure | Implemented |
 | D16 | `.docx` conversion with mammoth (underline enabled); headings deeper than H3 become H3 | Clean semantic HTML that matches what the editor supports | Implemented |
 | D17 | Validate uploads on both client and server | Instant feedback in the UI; the server stays the source of truth | Implemented |
+| D18 | Shares are keyed by **email**, not user id | Share with anyone, even people who have never signed in; access appears on first sign-in | Implemented |
+| D19 | Roles: owner > editor > viewer; only the owner manages sharing | Clear, testable model; editor sharing can be added later | Implemented |
+| D20 | One permission helper (`load_document(need=…)`) used by every endpoint | One place to get authorization right; specific 403 messages | Implemented |
+| D21 | Signed `HttpOnly` session cookie; `SECRET_KEY` from the environment | No tokens in JavaScript, no secrets in the repo, basic CSRF protection via SameSite=Lax | Implemented |
+| D22 | Missing doc → 404, no access → 403 | Lets the UI show "You don't have access", like Google Docs | Implemented |

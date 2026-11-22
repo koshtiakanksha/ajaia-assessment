@@ -4,6 +4,9 @@ import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { api, type Doc } from '../api'
 import Toolbar from '../components/Toolbar'
+import ShareDialog from '../components/ShareDialog'
+import Avatar from '../components/Avatar'
+import { unsavedChanges } from '../auth/context'
 
 type SaveState = 'saved' | 'dirty' | 'saving' | 'error'
 
@@ -48,18 +51,23 @@ export default function DocumentEditorPage() {
 }
 
 function DocumentEditor({ doc }: { doc: Doc }) {
+  const canEdit = doc.role !== 'viewer' // the backend enforces this too
+  const isOwner = doc.role === 'owner'
   const [title, setTitle] = useState(doc.title)
   const [saveState, setSaveState] = useState<SaveState>('saved')
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [sharing, setSharing] = useState(false)
 
   // StarterKit (TipTap v3) includes bold, italic, underline, headings and lists.
   const editor = useEditor({
     extensions: [StarterKit.configure({ heading: { levels: [1, 2, 3] } })],
     content: doc.content,
+    editable: canEdit,
     onUpdate: () => setSaveState('dirty'),
   })
 
   const save = useCallback(async () => {
+    if (!canEdit) return
     setSaveState('saving')
     setSaveError(null)
     try {
@@ -70,7 +78,7 @@ function DocumentEditor({ doc }: { doc: Doc }) {
       setSaveError((e as Error).message)
       setSaveState('error')
     }
-  }, [doc.id, editor, title])
+  }, [canEdit, doc.id, editor, title])
 
   // Ctrl/Cmd+S saves instead of opening the browser's "save page" dialog.
   useEffect(() => {
@@ -92,6 +100,14 @@ function DocumentEditor({ doc }: { doc: Doc }) {
     const onBeforeUnload = (e: BeforeUnloadEvent) => e.preventDefault()
     window.addEventListener('beforeunload', onBeforeUnload)
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [hasUnsavedChanges])
+
+  // ...and before signing out...
+  useEffect(() => {
+    unsavedChanges.current = hasUnsavedChanges
+    return () => {
+      unsavedChanges.current = false
+    }
   }, [hasUnsavedChanges])
 
   // ...and before in-app navigation (links, browser back/forward).
@@ -116,21 +132,36 @@ function DocumentEditor({ doc }: { doc: Doc }) {
           placeholder="Document title"
           aria-label="Document title"
           maxLength={200}
+          readOnly={!canEdit}
         />
-        <span className={`save-status ${saveState}`}>{STATUS_TEXT[saveState]}</span>
-        <button
-          className="primary"
-          onClick={save}
-          disabled={saveState === 'saving' || saveState === 'saved'}
-        >
-          Save
-        </button>
+        {canEdit ? (
+          <>
+            <span className={`save-status ${saveState}`}>{STATUS_TEXT[saveState]}</span>
+            <button onClick={save} disabled={saveState === 'saving' || saveState === 'saved'}>
+              Save
+            </button>
+          </>
+        ) : (
+          <span className="badge badge-viewer">View only</span>
+        )}
+        {isOwner ? (
+          <button className="primary" onClick={() => setSharing(true)}>Share</button>
+        ) : (
+          <span className="owned-by muted" title={doc.owner.email}>
+            <Avatar user={doc.owner} size={20} /> Owned by {doc.owner.name}
+          </span>
+        )}
       </div>
 
       {saveError && <p className="error">{saveError}</p>}
+      {!canEdit && (
+        <p className="notice">You have view-only access. Ask {doc.owner.name} for edit access.</p>
+      )}
 
-      <Toolbar editor={editor} />
-      <EditorContent editor={editor} className="editor" />
+      {canEdit && <Toolbar editor={editor} />}
+      <EditorContent editor={editor} className={`editor ${canEdit ? '' : 'readonly'}`} />
+
+      {sharing && <ShareDialog docId={doc.id} title={title} onClose={() => setSharing(false)} />}
     </section>
   )
 }

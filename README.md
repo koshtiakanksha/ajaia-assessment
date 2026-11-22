@@ -4,7 +4,7 @@ A small full-stack document editor inspired by Google Docs. It is built for an A
 
 The goal is not to clone Google Docs. It is to ship the strongest working version within the timebox, showing product judgment, full-stack capability, and clear prioritization.
 
-> **Status:** In progress. Document creation, the rich-text editor, rename, save/reopen, and **file import (.txt, .md, .docx)** work locally. Sharing and deployment are next.
+> **Status:** In progress. Editing, file import (.txt, .md, .docx), and **users and sharing** (owner, editor and viewer access by email) work locally. Deployment is next.
 > The AI-assisted development process is logged in [AI_WORKFLOW.md](AI_WORKFLOW.md), and test rounds and issues are tracked in [TESTING.md](TESTING.md).
 
 ---
@@ -29,21 +29,21 @@ Everything in this section is a requirement from the brief. The MVP aims for the
 - [x] Reject unsupported or oversized files with a clear error message
 
 #### 3. Sharing
-- [ ] Every document has an **owner**
-- [ ] The owner can grant another user access (by email or username)
-- [ ] The document list visibly separates **"My documents"** from **"Shared with me"**
-- [ ] Users are simulated with **seeded accounts and a lightweight login** (no real auth)
+- [x] Every document has an **owner**
+- [x] The owner can grant another user access by email, with **viewer** or **editor** roles, and can change roles or revoke access
+- [x] The document list visibly separates **"My documents"** from **"Shared with me"**
+- [x] Users are simulated with **seeded accounts and a lightweight login** (no real auth)
 
 #### 4. Persistence
-- [ ] Documents, owners, and shares persist in a database and survive refresh or restart
-- [ ] Formatting is preserved: content is stored as sanitized HTML
-- [ ] Shared access can be demonstrated: log in as user A, share, then log in as user B and see the document
+- [x] Documents, owners, and shares persist in a database and survive refresh or restart
+- [x] Formatting is preserved: content is stored as sanitized HTML
+- [x] Shared access can be demonstrated: log in as user A, share, then log in as user B and see the document
 
 #### 5. Product and engineering quality
 - [x] Clear setup and run instructions
 - [ ] A working public deployment reviewers can access
-- [ ] Basic validation and error handling (missing or invalid input, 403/404 responses, upload errors)
-- [ ] At least one meaningful automated test (for example, that a non-shared user can't access a document)
+- [x] Basic validation and error handling (missing or invalid input, 403/404 responses, upload errors)
+- [x] At least one meaningful automated test (for example, that a non-shared user can't access a document)
 - [ ] A short architecture note explaining priorities and tradeoffs
 
 ### Additional features (after the MVP, in rough priority order)
@@ -51,8 +51,8 @@ Everything in this section is a requirement from the brief. The MVP aims for the
 | # | Feature | Why it's valuable |
 |---|---------|-------------------|
 | 1 | **Autosave** (debounced) with "Saving… / Saved" indicator | Removes the most common source of lost work |
-| 2 | **Share roles**: viewer vs. editor | A natural next step for access control; read-only mode in the editor |
-| 3 | **Revoke access** and list current collaborators | Completes the sharing lifecycle |
+| 2 | ~~Share roles (viewer vs. editor)~~ | ✅ Built as part of the MVP sharing work |
+| 3 | ~~Revoke access and list current collaborators~~ | ✅ Built as part of the MVP sharing work |
 | 4 | **Export** a document to `.md` / `.docx` / PDF | Pairs with import; makes content portable |
 | 5 | **Search and sort** the document list | Usability once there are many docs |
 | 6 | **Version history** (snapshots on save, restore) | Safety net for shared editing |
@@ -87,16 +87,20 @@ Everything in this section is a requirement from the brief. The MVP aims for the
 
 ```
 backend/                FastAPI + SQLModel + SQLite
-  app/main.py           API routes
-  app/models.py         Document table + request/response schemas and validation
+  app/main.py           App setup: session middleware, routers, startup (create tables + seed)
+  app/auth.py           Simulated sign-in (signed session cookie), current-user dependency
+  app/documents.py      Document, import and sharing endpoints + permission checks
+  app/models.py         User / Document / DocumentShare tables + request/response schemas
+  app/seed.py           Demo users and sample shared documents
   app/database.py       Engine and session (DATABASE_URL, defaults to sqlite:///./app.db)
   app/sanitize.py       HTML allowlist sanitizer (nh3)
   app/importers.py      .txt / .md / .docx → HTML conversion and validation
   tests/                pytest suite (in-memory SQLite via conftest.py)
 frontend/               React + TypeScript + Vite
   src/api.ts            Typed fetch wrapper for the API
-  src/pages/            DocumentList, DocumentEditor (with unsaved-changes guard)
-  src/components/       Toolbar (TipTap formatting buttons)
+  src/auth/             AuthGate (session check), Login screen, useAuth()
+  src/pages/            DocumentList (My documents / Shared with me), DocumentEditor (role-aware)
+  src/components/       Toolbar, ShareDialog, Avatar
 ```
 
 ## Setup & run
@@ -123,22 +127,70 @@ Open http://localhost:5173. Vite forwards `/api/*` requests to the backend on po
 
 **3. Tests and checks**
 ```bash
-cd backend && source .venv/bin/activate && pytest   # 26 API tests (documents + import)
+cd backend && source .venv/bin/activate && pytest   # 55 API tests (documents, import, auth and sharing)
 cd frontend && npm run lint && npm run build        # lint + type-check + production build
 ```
 
-**Configuration:** the only setting is `DATABASE_URL`, an optional environment variable that defaults to the local SQLite file `backend/app.db`. No API keys or secrets are needed. Keep any future secrets in a `.env` file; `.gitignore` already excludes it.
+**Configuration** (all optional for local development):
 
-### API (so far)
+| Variable | Default | Purpose |
+|---|---|---|
+| `DATABASE_URL` | `sqlite:///./app.db` | Database connection |
+| `SECRET_KEY` | random per process | Signs the session cookie. **Set it in any shared or deployed environment.** Without it, users are signed out whenever the server restarts |
+| `COOKIE_SECURE` | `0` | Set to `1` behind HTTPS so the session cookie is only sent over HTTPS |
+| `SEED_DEMO_DATA` | `1` | Seeds demo users and sample documents into an empty database |
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/health` | Health check |
-| GET | `/api/documents` | List documents (most recently edited first) |
-| POST | `/api/documents` | Create a document (`title` is optional and defaults to "Untitled document") |
-| GET | `/api/documents/{id}` | Get one document, including its content |
-| PATCH | `/api/documents/{id}` | Rename and/or save content. Content is sanitized HTML |
-| POST | `/api/documents/import` | Upload one file (multipart field `file`) and create a new document from it. Returns `400` for an unsupported, empty or corrupt file, and `413` if it's over 5 MB |
+No API keys are needed. Keep secrets in a `.env` file; `.gitignore` already excludes it.
+
+> **Upgrading from an earlier checkout?** The database schema gained users and sharing. Delete `backend/app.db` and restart; demo data is re-seeded automatically.
+
+### API
+
+Everything except `/api/health`, `/api/auth/demo-users` and `/api/auth/login` requires a signed-in session (otherwise `401`).
+
+| Method | Path | Who | Description |
+|--------|------|-----|-------------|
+| GET | `/api/health` | anyone | Health check |
+| GET | `/api/auth/demo-users` | anyone | Seeded accounts for the sign-in screen |
+| POST | `/api/auth/login` | anyone | `{email}` signs in, creating the user on first sign-in |
+| POST | `/api/auth/logout` | signed in | End the session |
+| GET | `/api/auth/me` | signed in | Current user |
+| GET | `/api/users` | signed in | Other known users (email suggestions in the share dialog) |
+| GET | `/api/documents` | signed in | Owned and shared documents, each with your `role` and the `owner` |
+| POST | `/api/documents` | signed in | Create a document (you become the owner) |
+| GET | `/api/documents/{id}` | owner, editor, viewer | Get one document. Returns `403` without access and `404` if it doesn't exist |
+| PATCH | `/api/documents/{id}` | owner, editor | Rename and/or save content. Viewers get `403` |
+| POST | `/api/documents/import` | signed in | Upload one file (multipart field `file`) to create a new document. Returns `400` for an unsupported, empty or corrupt file, and `413` if it's over 5 MB |
+| GET | `/api/documents/{id}/shares` | owner | The owner and everyone with access |
+| POST | `/api/documents/{id}/shares` | owner | `{emails: [...], role: "viewer"\|"editor"}`: share with up to 20 people at once. Re-sharing updates the role |
+| PATCH | `/api/documents/{id}/shares/{share_id}` | owner | `{role}`: change someone's access |
+| DELETE | `/api/documents/{id}/shares/{share_id}` | owner | Revoke access |
+
+## Users & sharing
+
+**Demo accounts** (no passwords, simulated sign-in):
+
+| Account | Seeded with |
+|---|---|
+| **Alice Johnson** (alice@example.com) | Owns "Welcome to Ajaia Docs" (Bob is an editor, Carol a viewer). Bob shares "Team meeting notes" with her as an editor |
+| **Bob Smith** (bob@example.com) | Owns "Team meeting notes" |
+| **Carol Lee** (carol@example.com) | Can view "Welcome to Ajaia Docs" |
+
+You can also sign in with **any email address**; the account is created on first sign-in.
+
+**How sharing works**
+- Open a document you own and click **Share**. Type one or more email addresses (press Enter or a comma after each, or paste a list), choose **Viewer** or **Editor**, and click **Share**.
+- **People with access** lists the owner and everyone invited. Change a role from the dropdown, or click **Remove** to revoke access. Changes take effect immediately.
+- **Sharing isn't limited to existing users.** Access is stored per email address, so you can invite someone who has never signed in. The document appears in their **Shared with me** section the first time they sign in with that email, and the owner then sees their name instead of "Hasn't signed in yet".
+- The documents page has two sections: **My documents** and **Shared with me**. Shared rows show the owner and a **Can edit** or **View only** badge.
+
+| | Owner | Editor | Viewer |
+|---|:-:|:-:|:-:|
+| Open and read | ✅ | ✅ | ✅ |
+| Edit content and rename | ✅ | ✅ | ❌ read-only editor, no toolbar |
+| Share, change roles, revoke | ✅ | ❌ | ❌ |
+
+**Permissions are enforced on the backend.** The UI hides what you can't do, but every API call checks your role. For example, a viewer's `PATCH` returns `403`, and so does an editor trying to manage shares. If access is revoked while someone has the document open, their next save fails with a clear message.
 
 ## File import
 
@@ -168,7 +220,9 @@ Turn an existing file into a new editable document.
 - **Uploads:** an extension allowlist (`.txt`, `.md`, `.docx`), a 5 MB limit (the server reads at most limit + 1 bytes), a zip signature check before `.docx` parsing, and sanitized output. Files aren't stored, only the converted document.
 - **SQL injection:** all queries go through SQLModel/SQLAlchemy with bound parameters.
 - **CORS:** not enabled. The API is same-origin only (Vite proxy in development, one service in production).
-- **Known gap (intentional for now):** there's **no authentication yet**, so anyone who can reach the API can read and edit every document. Simulated users, ownership, and sharing are the next MVP step, and the app should not be deployed publicly with real data before then.
+- **Sessions:** a signed session cookie (`HttpOnly`, `SameSite=Lax`, and `Secure` when `COOKIE_SECURE=1`). A tampered cookie is rejected. `SameSite=Lax` stops the cookie being sent on cross-site POSTs, which gives basic CSRF protection.
+- **Authorization:** every document and share endpoint checks the caller's role on the server. Share ids are scoped to their document, so a share id from one document can't be used to change another.
+- **Known limitation (by design for this demo):** sign-in is **simulated**. Anyone can sign in as any email without a password, so this demonstrates the permission model, not identity verification. Real auth (OAuth or magic links) would replace only `app/auth.py`; the sharing logic depends only on the current user.
 
 ---
 
@@ -198,6 +252,8 @@ The full log is in [AI_WORKFLOW.md](AI_WORKFLOW.md). Summary:
 ## 5. How I checked the output
 
 See [TESTING.md](TESTING.md) for the full log.
+
+**Round 3 (users and sharing):** 29 new backend tests (55 in total) covering 401, 403 and 404 for every role, sharing with multiple people, sharing with never-seen emails, role changes, revoking, and session tampering. Plus a 23-check multi-user browser suite with four separate sessions (Alice, Bob, Carol, and a newcomer). It found and fixed a CSS class collision that stretched the role badge, the browser's native validation replacing our styled error on sign-in, and a share-box bug that would have cut off emails early.
 
 **Round 2 (file import):** 14 new backend tests and a 16-check browser test of the full import flow (button, drag-and-drop, all three file types, editing after import, client- and server-side rejections, mobile). It found and fixed one issue: `.docx` underline was being dropped.
 

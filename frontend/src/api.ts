@@ -13,11 +13,40 @@ export function validateImportFile(file: File): string | null {
   return null
 }
 
+export interface User {
+  id: number
+  email: string
+  name: string
+}
+
+export type ShareRole = 'viewer' | 'editor'
+export type AccessRole = 'owner' | ShareRole
+
 export interface DocumentSummary {
   id: number
   title: string
   updated_at: string
+  role: AccessRole // the signed-in user's access
+  owner: User
 }
+
+export interface Share {
+  id: number
+  email: string
+  role: ShareRole
+  name: string | null // set once that email has signed in
+}
+
+export interface SharingInfo {
+  owner: User
+  shares: Share[]
+}
+
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
+export const isValidEmail = (email: string) => EMAIL_RE.test(email.trim())
+
+/** Fired when the session is missing or expired; AuthProvider shows sign-in. */
+export const AUTH_EXPIRED_EVENT = 'auth:expired'
 
 export interface Doc extends DocumentSummary {
   content: string
@@ -40,6 +69,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   }
   // 502/503/504 come from the dev proxy (or a host) when the API is unreachable.
   if ([502, 503, 504].includes(res.status)) throw new Error(OFFLINE_MESSAGE)
+  if (res.status === 401 && path !== '/auth/login') window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT))
   if (!res.ok) {
     // FastAPI returns { detail: string } for HTTP errors and
     // { detail: [{ msg }] } for validation errors.
@@ -50,10 +80,29 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
       : detail || `Request failed (${res.status})`
     throw new Error(message)
   }
-  return res.json()
+  return res.status === 204 ? (undefined as T) : res.json()
 }
 
+const json = (method: string, data: unknown): RequestInit => ({ method, body: JSON.stringify(data) })
+
 export const api = {
+  // Auth (simulated: no passwords)
+  me: () => request<User>('/auth/me'),
+  demoUsers: () => request<User[]>('/auth/demo-users'),
+  login: (email: string) => request<User>('/auth/login', json('POST', { email })),
+  logout: () => request<void>('/auth/logout', { method: 'POST' }),
+  knownUsers: () => request<User[]>('/users'),
+
+  // Sharing (owner only)
+  getShares: (docId: number) => request<SharingInfo>(`/documents/${docId}/shares`),
+  addShares: (docId: number, emails: string[], role: ShareRole) =>
+    request<SharingInfo>(`/documents/${docId}/shares`, json('POST', { emails, role })),
+  updateShare: (docId: number, shareId: number, role: ShareRole) =>
+    request<SharingInfo>(`/documents/${docId}/shares/${shareId}`, json('PATCH', { role })),
+  revokeShare: (docId: number, shareId: number) =>
+    request<SharingInfo>(`/documents/${docId}/shares/${shareId}`, { method: 'DELETE' }),
+
+  // Documents
   listDocuments: () => request<DocumentSummary[]>('/documents'),
   getDocument: (id: number) => request<Doc>(`/documents/${id}`),
   createDocument: (title?: string) =>

@@ -5,6 +5,7 @@ nh3==0.3.8
 python-multipart==0.0.34
 markdown==3.11.3
 mammoth==1.13.0
+itsdangerous==2.2.0
 
 # dev / test
 pytest==9.2.0
