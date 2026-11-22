@@ -1,6 +1,8 @@
 # Testing Log
 
-This file tracks how the app is tested, which issues were found, and their status. It's updated each testing round.
+This file tracks how the app is tested, which issues were found, and their status. It's updated each testing round, with the newest round first.
+
+> **Note:** each round describes the UI **as it was at the time**. Rounds 1–3 mention things later replaced in round 4, such as the Save button (now autosave), the "← Documents" link (now the Ajaia logo) and the "⬆ Import file" button (now the Import file tile). For the current UI, see the [manual test checklist](#manual-test-checklist).
 
 ## How to run the automated checks
 
@@ -68,7 +70,7 @@ Run against the deployed Render service (Docker + Render Postgres). **The demo a
 | T25 | 🟡 Low | The title box was a fixed width, leaving a gap before "All changes saved". | Screenshot review | The title sizes itself to its text, like Docs | ✅ Fixed |
 | T26 | 🟡 Low | nh3 rewrites styles (`text-align:center`, `Georgia , serif`); the stray space before commas would stop the font dropdown recognizing the font. | Sanitizer unit tests | Normalize after cleaning; tests compare the compact form | ✅ Fixed |
 | T27 | 🟡 Low | **New formatting would have been stripped on save.** The old sanitizer removed all `style` attributes, so fonts, colors, alignment and line spacing would vanish on reload, the same class of bug as T1. | Designed in before building the UI (sanitizer first) | CSS property allowlist with value checks, plus checklist attributes | ✅ Prevented |
-| T28 | 🟡 Low | With autosave, the old "Leave / Sign out without saving?" prompts would have appeared needlessly. | Design review | Leaving and signing out **save first**, and only ask if saving fails (tested both ways, including offline) | ✅ Fixed |
+| T28 | 🟡 Low | With autosave, the old "Leave / Sign out without saving?" prompts would have appeared needlessly. | Design review | Leaving and signing out **save first**, and only ask if saving fails. Browser tests cover "save first, no prompt" for both; the failure prompt itself has no automated test | ✅ Fixed |
 | T29 | 🟡 Low | Lint: autosave's retry referenced `flush` during its own initialization; refs passed to a render-time helper. | `oxlint` | A ref for the recursive retry; the menu builder became a hook | ✅ Fixed |
 | T30 | 🟠 Medium | **Render free instances have no persistent disk**, so SQLite data would be wiped on every deploy or restart. | Deployment research | Added Postgres (psycopg 3, URL normalization, `pool_pre_ping`); Render Blueprint provisions the database | ✅ Fixed |
 | T31 | 🟡 Low | FastAPI's Swagger UI at `/docs` collided with the app's `/docs/:id` document URLs once FastAPI serves the UI. | Code review while adding SPA serving | Moved API docs to `/api/docs` and `/api/openapi.json` | ✅ Fixed |

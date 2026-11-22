@@ -30,7 +30,7 @@ Browser (React + TipTap)                         FastAPI (one process)          
 
 1. **Correct core behavior over breadth.** Create, edit, save, reopen, import and share all work end to end, with server-side validation and permission checks. Tests prove those first.
 2. **Never lose work.** Autosave (800 ms debounce, one save at a time, automatic retry when offline), plus saving before leaving the page or signing out, with a warning only if saving fails. Several bugs I found were data-loss bugs: formatting silently stripped on save, edits lost on navigation, and keystrokes landing in the wrong field. They got priority.
-3. **Security by default.** Server-side sanitizing, role checks on every endpoint, signed cookies, no secrets in the repo, upload limits, and a request-size limit applied before the body is read.
+3. **Security by default.** Server-side sanitizing, role checks on every endpoint, signed cookies, no secrets in the repo, upload limits, and a request-size limit checked before the body is read (using the declared `Content-Length`).
 4. **A familiar UX.** Google Docs conventions (menu bar, toolbar, paper page, Share dialog with email chips and roles, "Saving… / All changes saved") in Ajaia's brand (logo, navy, sky, Inter), so the app needs no explanation.
 5. **Proof, not claims.** 77 backend tests and 69 browser checks across four suites. The browser checks run against both the dev servers and the production Docker image with Postgres. Each test round is logged in [TESTING.md](TESTING.md).
 

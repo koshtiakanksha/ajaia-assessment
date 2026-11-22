@@ -216,7 +216,7 @@ Dockerfile, render.yaml   Production image and Render Blueprint
 - **XSS:** HTML is sanitized on the server against a tag allowlist, a CSS property allowlist with value checks (no `url()`, `expression()` or escapes), and safe link schemes. The UI renders through TipTap, never raw `innerHTML`.
 - **Authorization:** role checks on every endpoint. Share ids are scoped to their document.
 - **Sessions:** a signed cookie (`HttpOnly`, `SameSite=Lax`, `Secure` in production). Tampered cookies are rejected.
-- **Input limits:** titles 1–200 characters, content up to about 1 MB, uploads up to 5 MB, and requests over the limit rejected **before the body is read**.
+- **Input limits:** titles 1–200 characters, content up to about 1 MB, uploads up to 5 MB. Requests that declare a size (`Content-Length`) over the limit are rejected **before the body is read**.
 - **Other:** no SQL injection (bound parameters), no CORS (same-origin), no secrets in the repo, and the container runs as a non-root user.
 - **Known limitation:** sign-in is simulated by design. Anyone can sign in as any email. This demonstrates the permission model, not identity verification.
 
@@ -242,7 +242,7 @@ Dockerfile, render.yaml   Production image and Render Blueprint
 6. **Polish to Docs level.** Menu bar, toolbar formatting, paper layout, autosave and Ajaia branding.
 7. **Ship.** Docker image, Postgres, Render Blueprint, a production rehearsal locally, and documentation.
 
-Each step was tested before moving on and pushed as its own commit.
+Each step was tested before moving on and pushed to GitHub in small commits.
 
 ## 3. What I built (and how to use it)
 
@@ -280,9 +280,9 @@ Full details are in [TESTING.md](TESTING.md). In short:
   - All run against **both** the dev servers **and** the production Docker image with **Postgres**.
 - **Live deployment verified:** HTTPS and redirect, routes, seeded data, `Secure` cookie, every role's permissions, a real 6 MB upload rejected with 413, and 8 browser checks on the Render site (create, autosave, formatting, import, viewer mode, mobile).
 - **Resilience:** backend stopped mid-edit (autosave shows offline and recovers), access revoked mid-edit, cleared sessions.
-- **Static checks:** TypeScript, oxlint, production build, `npm audit` and `pip-audit` (0 known vulnerabilities), and secret scans before every push.
+- **Static checks:** TypeScript, oxlint, production build, `npm audit` and `pip-audit` (0 known vulnerabilities). Secret scans of every feature commit, plus a full-history scan before submission (clean).
 - **Visual review** of screenshots (desktop and 390px mobile) after each UI change.
-- **Over 20 real bugs found and fixed** (logged as T1–T33, alongside test-only fixes and known limitations). Highlights: formatting silently stripped on save (twice, for different formats), lost edits on navigation, the Save button off-screen on mobile, a 500 on huge ids, `.docx` underline dropped, the role badge stretched by a CSS collision, and keystrokes landing in the font-size box in the production build.
+- **Over 20 real bugs found and fixed** (logged as T1–T33, alongside test-only fixes and known limitations). Highlights: formatting silently lost (links and rules on save, underline on `.docx` import), lost edits on navigation, the Save button off-screen on mobile, a 500 on huge ids, `.docx` underline dropped, the role badge stretched by a CSS collision, and keystrokes landing in the font-size box in the production build.
 
 ## 6. Tradeoffs & next steps
 

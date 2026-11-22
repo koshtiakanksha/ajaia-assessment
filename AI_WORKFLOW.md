@@ -2,6 +2,8 @@
 
 This file tracks how AI (Claude Code) was used during development: the prompts given, what the AI produced, the decisions made, and the results. It feeds the "How I used AI" section of the [README](README.md).
 
+> Prompts are shown in quotes but are **lightly edited** for spelling and clarity, not verbatim.
+
 ## How to add an entry
 
 Copy this template for each meaningful prompt or decision:
@@ -176,7 +178,7 @@ Copy this template for each meaningful prompt or decision:
 - **Date:** 2026-11-22
 - **Prompt:** "Make the UI feel more like Google Docs (the menu bar works). Use Render for hosting, and use Ajaia's actual logo, text style and colors. Add autosave and other useful formatting features, complete the documentation, and push to GitHub."
 - **AI output:**
-  - **Sanitizer first** (to avoid repeating the "formatting silently stripped" bug from T1): allowed `style` with a CSS property allowlist (font-family, font-size, color, background-color, text-align, line-height), **value checks** (no `url(`, `expression(`, escapes or markup) and checklist attributes. 22 new tests.
+  - **Sanitizer first** (to avoid repeating the "formatting silently stripped" bug from T1): allowed `style` with a CSS property allowlist (font-family, font-size, color, background-color, text-align, line-height), **value checks** (no `url(`, `expression(`, escapes or markup) and checklist attributes. 18 new sanitizer tests, plus 4 app tests for deployment (22 new in total).
   - **Editor:** TipTap add-ons for font family and size, color, highlight, alignment, checklists, word count and placeholder, plus a small custom extension for paragraph line spacing. A **toolbar** (undo/redo/print, style, font, −/size/+, B/I/U/S, color and highlight pickers, link, alignment, spacing, lists, indent, clear formatting) and a **menu bar** (File, Edit, View, Insert, Format) with shortcuts. A link bar, downloads (`.html`/`.txt`), and print CSS.
   - **Autosave** (`useAutosave`): 800 ms debounce, one save at a time, re-save if edits arrive mid-save, automatic retry when offline ("Offline. Retrying…"), and permanent errors shown. Leaving the page or signing out **saves first** and only asks if that fails. The Save button was removed; Cmd/Ctrl+S saves immediately.
   - **Docs layout and Ajaia brand:** the logo and "Docs" wordmark, the "A" icon as app icon and favicon, Inter, the brand palette, a paper page on a tinted canvas, a sticky header and toolbar, an avatar account menu, and a home page with "Start a new document" tiles plus document tables (Owner, Last modified).
@@ -205,6 +207,23 @@ Copy this template for each meaningful prompt or decision:
 - **Finding:** a fake oversized request (header claiming 9 MB, 1-byte body) returned 400 from Render's proxy. Retested with a real 6 MB file, which correctly returned 413. The first probe was faulty, not the app.
 - **Result:** All checks pass. Added the live URL to the README and the results to TESTING.md. The MVP checklist is complete.
 
+### #12: Pre-submission review and final live verification
+- **Date:** 2026-11-22
+- **Prompt:** "Review the README, architecture note, testing results and AI workflow for accuracy and consistency. Then verify the deployed app's core features and persistence at the live URL, and create SUBMISSION.md with all the deliverables. Don't add features or push anything until I approve, and tell me anything that needs my personal review."
+- **AI output:**
+  - **Accuracy review:** checked the docs' claims against the code, tests, package requirements and git history. Fixed 9 inaccuracies, including:
+    - The size limit applies only to requests that declare their size (`Content-Length`).
+    - "Secret scans before every push" was untrue for two small doc-only pushes; replaced by a full-history scan, which is clean.
+    - "Formatting stripped twice": one of the two cases was prevented by design, not found as a bug.
+    - "Tested both ways" for the save-failure prompt: that path has no automated test.
+    - The test breakdown in #10 (18 sanitizer tests and 4 app tests).
+    - D8 marked superseded by D24.
+  - Added notes that earlier test rounds describe the UI as it was then, and that the prompts in this log are lightly edited.
+  - **Verified:** test counts (77 = 12 + 14 + 29 + 18 + 4), the API table against the routes, config defaults, Node and Python versions, and `.docx` hyperlink import (a newly confirmed claim).
+  - **Live verification:** 13/13 checks against https://ajaia-docs-e26f.onrender.com, covering persistence (a document from the previous session intact after the redeploy; seed data not duplicated), create, rename, rich text, autosave, reopen in a fresh session, validation, `.docx` and `.txt` import, the full share → view-only (403) → editor → revoke cycle, and the sign-in requirement (401). Demo accounts were only read; writes used the `qa-check` throwaway accounts.
+  - Created **SUBMISSION.md**: deliverable links, a 5-minute reviewer tour, a requirement → delivery table, the verification summary, known limitations and local run steps.
+- **Decision:** Pending the user's review. Nothing pushed.
+
 ---
 
 ## Key decisions (running summary)
@@ -218,7 +237,7 @@ Copy this template for each meaningful prompt or decision:
 | D5 | A single deployable service (FastAPI serves the React build) | One URL and no CORS setup in production, which makes deployment simpler | Implemented |
 | D6 | Stack: FastAPI + SQLModel/SQLite, React + TypeScript + Vite, TipTap | Confirmed by the user in #3 | Implemented |
 | D7 | Backend runs on port 8001 in development; Vite forwards `/api` to it | Port 8000 is used by another local project | Implemented |
-| D8 | Explicit Save (button and Cmd/Ctrl+S) for now; autosave later | Simplest reliable behavior first. Autosave is additional feature #1 | Implemented |
+| D8 | Explicit Save (button and Cmd/Ctrl+S) for now; autosave later | Simplest reliable behavior first. Autosave is additional feature #1 | Superseded by D24 (autosave) |
 | D9 | Load the document before mounting the TipTap editor | Avoids StrictMode and stale-response bugs, and is simpler than calling `setContent` after mount | Implemented |
 | D10 | Limit document content to about 1 MB | Cheap protection against oversized requests | Implemented |
 | D11 | No secrets in the repo: config via env vars, `.env*` ignored | Safe to publish the repo; ready for deployment config later | Implemented |
