@@ -198,6 +198,13 @@ Copy this template for each meaningful prompt or decision:
 - **Decisions:** see D23–D28 below.
 - **Result:** 77/77 pytest; browser checks 10/10 core, 20/20 editor, 16/16 import and 23/23 sharing on **both** dev and Docker+Postgres; lint, types and build clean; 0 known vulnerabilities. The Render deploy itself needs the user's Render account (Blueprint → Apply), and the live URL goes into the README afterwards.
 
+### #11: Verify the live Render deployment
+- **Date:** 2026-11-22
+- **Prompt:** "Here is the link (https://ajaia-docs-e26f.onrender.com). Tell me if it works, and the next steps."
+- **AI output:** Tested the live site over HTTPS: health, SPA routes, assets, the HTTPS redirect, seed data, cookie flags, 401/403 for each role, and the upload size limit. Then 8 browser checks covering sign-in, home, editor, menus, the Share dialog, viewer mode, create, autosave, formatting round-trip, import, and mobile. **Kept the demo accounts read-only** and used a throwaway QA account for writes, so reviewers see clean data.
+- **Finding:** a fake oversized request (header claiming 9 MB, 1-byte body) returned 400 from Render's proxy. Retested with a real 6 MB file, which correctly returned 413. The first probe was faulty, not the app.
+- **Result:** All checks pass. Added the live URL to the README and the results to TESTING.md. The MVP checklist is complete.
+
 ---
 
 ## Key decisions (running summary)
@@ -230,5 +237,5 @@ Copy this template for each meaningful prompt or decision:
 | D24 | **Autosave** replaces the Save button; leaving or signing out saves first | Docs behavior; the only prompt is when saving actually fails | Implemented |
 | D25 | Menu bar (File, Edit, View, Insert, Format) instead of document tabs | The user's choice; mostly UI, no schema change | Implemented |
 | D26 | Ajaia brand: real logo and icon, Inter, navy/sky palette from ajaia.ai | The user asked for the company look; Docs layout, Ajaia skin | Implemented |
-| D27 | Render: Docker web service + **Postgres** via a `render.yaml` Blueprint | The free tier has no persistent disk (SQLite would reset); one-click deploy | Implemented (deploy pending the user's Render account) |
+| D27 | Render: Docker web service + **Postgres** via a `render.yaml` Blueprint | The free tier has no persistent disk (SQLite would reset); one-click deploy | Live: https://ajaia-docs-e26f.onrender.com |
 | D28 | FastAPI serves the built UI with an SPA fallback; API docs at `/api/docs` | One service and URL, no CORS; avoids the `/docs` route clash | Implemented |

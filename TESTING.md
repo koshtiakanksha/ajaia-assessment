@@ -25,6 +25,27 @@ Each suite was run against **both** the dev servers (`localhost:5173`) **and** t
 
 ---
 
+## Live deployment check: 2026-11-22 (https://ajaia-docs-e26f.onrender.com)
+
+Run against the deployed Render service (Docker + Render Postgres). **The demo accounts were only read**, so reviewers see clean seed data. Writes used a throwaway `qa-check@example.com` account, whose documents only it can see.
+
+| Check | Result |
+|---|---|
+| `/api/health`, `/`, `/docs/1` (SPA route), brand assets, `/api/docs`; unknown `/api/*` → JSON 404 | ✅ |
+| `http://` → `https://` redirect (301) | ✅ |
+| Seed data: 3 demo users; Alice, Bob and Carol each see the right documents and roles | ✅ |
+| Session cookie is `Secure; HttpOnly; SameSite=Lax` | ✅ |
+| Anonymous → 401; viewer edit → 403; editor managing shares → 403; no access → 403 | ✅ |
+| Real 6 MB upload → 413 "upload limit is 5 MB", and no document created | ✅ |
+| Browser: sign-in page, Alice's home, editor, menus, Share dialog (read-only) | ✅ |
+| Browser: Carol's viewer mode (no toolbar, read-only page, Format items disabled) | ✅ |
+| Browser (QA account): create, **autosave**, reload persists; Georgia, 18pt, color, center, checklist round-trip; `.md` import; 403 on another user's doc | ✅ |
+| Mobile 390px: home and editor, no horizontal scroll | ✅ |
+
+**Note:** a first probe of the size limit returned 400. It claimed 9 MB but sent 1 byte, and Render's proxy rejected the mismatched length before the app saw it. A real 6 MB upload correctly returned 413, so this wasn't an app issue.
+
+---
+
 ## Round 4: 2026-11-22 (Docs-style UI, formatting, autosave, Ajaia brand, deployment)
 
 ### What was tested

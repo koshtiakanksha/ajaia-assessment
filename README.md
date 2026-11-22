@@ -2,7 +2,7 @@
 
 A full-stack document editor inspired by Google Docs, in Ajaia's brand. Create and format documents, import `.txt`, `.md` and `.docx` files, and share documents by email with viewer or editor access. Everything saves automatically.
 
-> **Live demo:** _added after the first Render deploy (see [Deploy to Render](#deploy-to-render))._
+> **Live demo:** **https://ajaia-docs-e26f.onrender.com** (Render free tier: the first visit after about 15 minutes idle takes about 50 seconds to wake up)
 > Sign in with one click as **Alice**, **Bob** or **Carol** (no password), or use any email address.
 >
 > More detail: [ARCHITECTURE.md](ARCHITECTURE.md) (design and tradeoffs) · [TESTING.md](TESTING.md) (test rounds and issues found) · [AI_WORKFLOW.md](AI_WORKFLOW.md) (how AI was used)
@@ -53,7 +53,7 @@ A full-stack document editor inspired by Google Docs, in Ajaia's brand. Create a
 | File upload into the workflow | ✅ `.txt`, `.md` and `.docx` become new editable documents. Types and limit are shown in the UI |
 | Sharing: owner, grant access, owned vs. shared | ✅ By email, viewer or editor, change or revoke, two sections |
 | Persistence with formatting preserved | ✅ SQLite locally, Postgres in production, sanitized HTML |
-| Setup instructions, deployment, validation, tests, architecture note | ✅ See below. Deployment is configured as a [Render Blueprint](#deploy-to-render) |
+| Setup instructions, deployment, validation, tests, architecture note | ✅ Live at **https://ajaia-docs-e26f.onrender.com** ([Render Blueprint](#deploy-to-render)), plus [ARCHITECTURE.md](ARCHITECTURE.md) |
 
 **Additional features** from the original plan that got built: autosave, share roles, revoking access, export (`.html` and `.txt`), and print. **Still to do:** version history, comments, search, attachments, real-time co-editing, and real authentication (see [Tradeoffs & next steps](#6-tradeoffs--next-steps)).
 
@@ -278,6 +278,7 @@ Full details are in [TESTING.md](TESTING.md). In short:
 - **69 browser checks** in headless Chrome across 4 suites:
   - core (10), editor and autosave (20), import (16), and multi-user sharing (23, with four simultaneous sessions).
   - All run against **both** the dev servers **and** the production Docker image with **Postgres**.
+- **Live deployment verified:** HTTPS and redirect, routes, seeded data, `Secure` cookie, every role's permissions, a real 6 MB upload rejected with 413, and 8 browser checks on the Render site (create, autosave, formatting, import, viewer mode, mobile).
 - **Resilience:** backend stopped mid-edit (autosave shows offline and recovers), access revoked mid-edit, cleared sessions.
 - **Static checks:** TypeScript, oxlint, production build, `npm audit` and `pip-audit` (0 known vulnerabilities), and secret scans before every push.
 - **Visual review** of screenshots (desktop and 390px mobile) after each UI change.
