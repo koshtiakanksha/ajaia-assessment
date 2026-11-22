@@ -4,7 +4,7 @@ A small full-stack document editor inspired by Google Docs. It is built for an A
 
 The goal is not to clone Google Docs. It is to ship the strongest working version within the timebox, showing product judgment, full-stack capability, and clear prioritization.
 
-> **Status:** In progress. Document creation, the rich-text editor, rename, and save/reopen work locally. Upload, sharing, and deployment are next.
+> **Status:** In progress. Document creation, the rich-text editor, rename, save/reopen, and **file import (.txt, .md, .docx)** work locally. Sharing and deployment are next.
 > The AI-assisted development process is logged in [AI_WORKFLOW.md](AI_WORKFLOW.md), and test rounds and issues are tracked in [TESTING.md](TESTING.md).
 
 ---
@@ -24,9 +24,9 @@ Everything in this section is a requirement from the brief. The MVP aims for the
 - [x] An editing flow that feels coherent: toolbar, clear save state, document list ↔ editor navigation
 
 #### 2. File upload
-- [ ] Upload a `.txt`, `.md`, or `.docx` file and turn it into a new editable document
-- [ ] Show the supported file types and size limit in the UI and in this README
-- [ ] Reject unsupported or oversized files with a clear error message
+- [x] Upload a `.txt`, `.md`, or `.docx` file and turn it into a new editable document
+- [x] Show the supported file types and size limit in the UI and in this README
+- [x] Reject unsupported or oversized files with a clear error message
 
 #### 3. Sharing
 - [ ] Every document has an **owner**
@@ -72,7 +72,7 @@ Everything in this section is a requirement from the brief. The MVP aims for the
 | **Frontend** | **React + TypeScript + Vite** | The most common, well-supported SPA stack. Vite gives a fast dev loop, and TypeScript catches API-shape bugs early |
 | **Rich-text editor** | **TipTap** (built on ProseMirror) | Provides bold, italic, underline, headings, and lists out of the box. Outputs HTML, which is easy to store and to produce from imports. It also has a clear upgrade path to real-time collaboration through its Yjs integration |
 | **Content format** | **Sanitized HTML** (via `nh3` on the backend) | Preserves formatting, is easy to generate from `.md` and `.docx` imports, and sanitizing on the server prevents stored XSS |
-| **File import** | `python-docx`/`mammoth` (`.docx` → HTML), `markdown` (`.md` → HTML), escaped plain text for `.txt` | Small, reliable libraries. Every import ends up as HTML that TipTap can load |
+| **File import** | `mammoth` (`.docx` → HTML), `markdown` (`.md` → HTML), escaped plain text for `.txt`; `python-docx` only in tests, to generate real `.docx` files | Small, reliable libraries. Every import ends up as HTML that TipTap can load |
 | **Auth (simulated)** | Seeded users + a "log in as" picker, which issues a signed session cookie | Meets the brief's "mocked auth" allowance while keeping ownership and sharing logic real and testable |
 | **Testing** | **pytest** + FastAPI `TestClient` (backend), optionally Vitest for the frontend | Backend tests cover the riskiest logic: permissions, sharing, and upload validation |
 | **Deployment** | One service: FastAPI serves the built React app. Hosted on **Render** or **Railway**, with Postgres (or SQLite on a persistent volume) | One deployable unit and one URL, with no CORS setup in production. Both hosts offer free or cheap tiers and deploy from GitHub |
@@ -91,6 +91,7 @@ backend/                FastAPI + SQLModel + SQLite
   app/models.py         Document table + request/response schemas and validation
   app/database.py       Engine and session (DATABASE_URL, defaults to sqlite:///./app.db)
   app/sanitize.py       HTML allowlist sanitizer (nh3)
+  app/importers.py      .txt / .md / .docx → HTML conversion and validation
   tests/                pytest suite (in-memory SQLite via conftest.py)
 frontend/               React + TypeScript + Vite
   src/api.ts            Typed fetch wrapper for the API
@@ -122,7 +123,7 @@ Open http://localhost:5173. Vite forwards `/api/*` requests to the backend on po
 
 **3. Tests and checks**
 ```bash
-cd backend && source .venv/bin/activate && pytest   # 12 API tests
+cd backend && source .venv/bin/activate && pytest   # 26 API tests (documents + import)
 cd frontend && npm run lint && npm run build        # lint + type-check + production build
 ```
 
@@ -137,12 +138,34 @@ cd frontend && npm run lint && npm run build        # lint + type-check + produc
 | POST | `/api/documents` | Create a document (`title` is optional and defaults to "Untitled document") |
 | GET | `/api/documents/{id}` | Get one document, including its content |
 | PATCH | `/api/documents/{id}` | Rename and/or save content. Content is sanitized HTML |
+| POST | `/api/documents/import` | Upload one file (multipart field `file`) and create a new document from it. Returns `400` for an unsupported, empty or corrupt file, and `413` if it's over 5 MB |
+
+## File import
+
+Turn an existing file into a new editable document.
+
+**How to use it:** on the **My documents** page, click **⬆ Import file**, or **drag and drop** a file onto the page. The new document opens in the editor right away, just like **+ New document**. Its title is the filename without the extension, and it's a normal document: rename it, edit it, save it.
+
+| Supported type | What's preserved |
+|---|---|
+| `.txt` | Paragraphs (blank lines) and line breaks. Text is shown exactly as written, so `<tags>` stay literal text |
+| `.md` / `.markdown` | Headings, bold, italic, links, bulleted and numbered lists, block quotes, code |
+| `.docx` | Headings, bold, italic, underline, links, bulleted and numbered lists |
+
+**Limits and behavior**
+- One file at a time, **up to 5 MB**. The supported types and the limit are shown on the page.
+- Files are checked in the browser for instant feedback (wrong type, empty, too large), then checked again on the server.
+- Headings below H3 become H3, because the editor supports H1–H3.
+- Imported HTML goes through the same sanitizer as typed content, so scripts and unsafe links are removed.
+- `.txt` files that aren't UTF-8, such as older Windows files, are decoded as Windows-1252.
+- **Not supported yet:** images and tables in `.docx` (only the text inside a table is kept), legacy `.doc`, PDF, and importing into an existing document.
 
 ## Security notes
 
 - **No secrets in the repo.** The app needs no API keys. `.env*`, key and certificate files, local databases, virtual environments, and `node_modules` are all ignored by git.
 - **XSS:** document HTML is sanitized on the server against a strict tag allowlist (`nh3`) before it's stored. Links are limited to `http`, `https` and `mailto`, and the editor renders content through TipTap, never through raw `innerHTML`.
 - **Input validation:** titles are trimmed and must be 1–200 characters. Content is limited to about 1 MB. Invalid input returns `422` with a readable message.
+- **Uploads:** an extension allowlist (`.txt`, `.md`, `.docx`), a 5 MB limit (the server reads at most limit + 1 bytes), a zip signature check before `.docx` parsing, and sanitized output. Files aren't stored, only the converted document.
 - **SQL injection:** all queries go through SQLModel/SQLAlchemy with bound parameters.
 - **CORS:** not enabled. The API is same-origin only (Vite proxy in development, one service in production).
 - **Known gap (intentional for now):** there's **no authentication yet**, so anyone who can reach the API can read and edit every document. Simulated users, ownership, and sharing are the next MVP step, and the app should not be deployed publicly with real data before then.
@@ -174,7 +197,11 @@ The full log is in [AI_WORKFLOW.md](AI_WORKFLOW.md). Summary:
 
 ## 5. How I checked the output
 
-See [TESTING.md](TESTING.md) for the full log. Round 1 so far:
+See [TESTING.md](TESTING.md) for the full log.
+
+**Round 2 (file import):** 14 new backend tests and a 16-check browser test of the full import flow (button, drag-and-drop, all three file types, editing after import, client- and server-side rejections, mobile). It found and fixed one issue: `.docx` underline was being dropped.
+
+**Round 1:**
 - **Automated:** 12 backend tests, lint, type-check and build, and dependency audits.
 - **API edge cases:** 25 live checks.
 - **Browser:** 21 headless-Chrome end-to-end checks, including mobile, plus a backend-down resilience test.

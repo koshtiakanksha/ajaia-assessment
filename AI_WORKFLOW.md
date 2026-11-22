@@ -113,6 +113,27 @@ Copy this template for each meaningful prompt or decision:
 - **Note on testing approach:** a first run of the browser suite showed 15 failures that cascaded from one harness problem. My test auto-dismissed the "unsaved changes" prompt, so the page never navigated. After fixing the harness, the 4 remaining failures were real bugs.
 - **Result:** 12/12 pytest, 21/21 browser checks, lint, types and build clean. Local database reset to empty for manual testing.
 
+### #7: File import (.txt, .md, .docx → editable documents)
+- **Date:** 2026-11-22
+- **Prompt:** "Next step: file uploads. Add support for importing .txt, .md and .docx as editable documents. Make uploading simple, intuitive and consistent with the existing app. Test the complete flow, update the docs, don't start sharing yet, and push to GitHub."
+- **AI output:**
+  - First committed the round-1 test fixes separately, so the feature gets a clean commit.
+  - **Backend:** `app/importers.py` handles conversion:
+    - `.txt`: escaped text; blank lines become paragraphs and newlines become `<br>`. Falls back to cp1252 for non-UTF-8 files.
+    - `.md`: the `markdown` library.
+    - `.docx`: `mammoth`, after checking the zip signature.
+    - Deeper headings become H3.
+  - New endpoint `POST /api/documents/import` with an extension allowlist, a 5 MB limit (returns 413), and 400s with readable messages for unsupported, empty or corrupt files. Output goes through the same `nh3` sanitizer as normal saves. The title comes from the filename.
+  - **Frontend:** an **⬆ Import file** button beside **+ New document**, drag-and-drop with a dashed overlay, and a visible hint with the supported types and limit. A client-side pre-check gives instant errors. On success it navigates to the new document, the same flow as "New document". Errors use the existing red error box.
+  - **Tests:** 14 new pytest tests (real `.docx` generated with python-docx) and a 16-check browser suite for the full flow, including drag-and-drop and mobile.
+- **Problem found:** `.docx` underline was silently dropped, because mammoth ignores underline by default. Fixed with `style_map="u => u"`; caught by the browser test against a real generated `.docx`.
+- **Decisions:**
+  - Import always creates a **new** document instead of merging into an existing one. It's the simplest model and matches the "New document" flow; importing into a draft is listed as a future option.
+  - Uploaded files are **converted, not stored**. There's nothing extra to secure or clean up.
+  - Validate on **both client and server**: the client for instant feedback, the server as the source of truth.
+  - Used `mammoth` instead of `python-docx` for conversion, because it outputs clean semantic HTML directly. python-docx is used only to generate test fixtures.
+- **Result:** 26/26 pytest, 16/16 import browser checks, 21/21 core regression checks, lint, types and build clean, 0 known vulnerabilities in the new dependencies.
+
 ---
 
 ## Key decisions (running summary)
@@ -133,3 +154,6 @@ Copy this template for each meaningful prompt or decision:
 | D12 | Sanitizer allows `<a href>` (http, https, mailto only) and `<hr>` | Match what the editor can produce, so formatting is never silently lost | Implemented |
 | D13 | Use React Router's data router (`createBrowserRouter`) with `useBlocker` | Needed to warn before in-app navigation discards unsaved edits | Implemented |
 | D14 | Only bump `updated_at` on real changes | Keeps "last edited" and list order truthful | Implemented |
+| D15 | Import creates a new document (`.txt`, `.md`, `.docx`, 5 MB max); files are converted, not stored | Simplest model, consistent with "New document", with no file storage to secure | Implemented |
+| D16 | `.docx` conversion with mammoth (underline enabled); headings deeper than H3 become H3 | Clean semantic HTML that matches what the editor supports | Implemented |
+| D17 | Validate uploads on both client and server | Instant feedback in the UI; the server stays the source of truth | Implemented |

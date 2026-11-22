@@ -1,3 +1,18 @@
+// Keep in sync with backend/app/importers.py
+export const IMPORT_EXTENSIONS = ['.txt', '.md', '.markdown', '.docx']
+export const MAX_IMPORT_MB = 5
+
+/** Client-side pre-check for instant feedback; the server re-validates. */
+export function validateImportFile(file: File): string | null {
+  const ext = file.name.includes('.') ? file.name.slice(file.name.lastIndexOf('.')).toLowerCase() : ''
+  if (!IMPORT_EXTENSIONS.includes(ext)) {
+    return `"${file.name}" isn't supported. You can import .txt, .md or .docx files.`
+  }
+  if (file.size > MAX_IMPORT_MB * 1024 * 1024) return `"${file.name}" is larger than ${MAX_IMPORT_MB} MB.`
+  if (file.size === 0) return `"${file.name}" is empty.`
+  return null
+}
+
 export interface DocumentSummary {
   id: number
   title: string
@@ -14,9 +29,11 @@ const OFFLINE_MESSAGE = "Can't reach the server. Check that it's running and try
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   let res: Response
   try {
+    // JSON bodies need a Content-Type; FormData (file uploads) sets its own.
+    const isJson = typeof options.body === 'string'
     res = await fetch(`/api${path}`, {
-      headers: { 'Content-Type': 'application/json' },
       ...options,
+      headers: isJson ? { 'Content-Type': 'application/json' } : undefined,
     })
   } catch {
     throw new Error(OFFLINE_MESSAGE) // network error: server down or no connection
@@ -41,6 +58,11 @@ export const api = {
   getDocument: (id: number) => request<Doc>(`/documents/${id}`),
   createDocument: (title?: string) =>
     request<Doc>('/documents', { method: 'POST', body: JSON.stringify(title ? { title } : {}) }),
+  importDocument: (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return request<Doc>('/documents/import', { method: 'POST', body: form })
+  },
   updateDocument: (id: number, data: { title?: string; content?: string }) =>
     request<Doc>(`/documents/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
 }

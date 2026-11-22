@@ -5,7 +5,7 @@ This file tracks how the app is tested, which issues were found, and their statu
 ## How to run the automated checks
 
 ```bash
-# Backend: 12 API tests (in-memory DB, never touches app.db)
+# Backend: 26 API tests (documents + file import; in-memory DB, never touches app.db)
 cd backend && source .venv/bin/activate && pytest
 
 # Frontend: lint + type-check + production build
@@ -13,6 +13,35 @@ cd frontend && npm run lint && npm run build
 ```
 
 Browser end-to-end checks ran in headless Chrome (playwright-core) against the local dev servers. Those scripts aren't in the repo yet; see the follow-ups below.
+
+---
+
+## Round 2: 2026-11-22 (file import: .txt, .md, .docx)
+
+### What was tested
+
+| Layer | What | Result |
+|---|---|---|
+| Backend unit | 14 new tests in `tests/test_import.py`: each file type converts correctly (a real `.docx` is generated with python-docx), the document is editable afterwards, non-UTF-8 text, case-insensitive extensions, unsupported types (`.png`, `.js`, `.doc`, no extension), empty file, fake and corrupt `.docx`, over 5 MB, missing file field, and no document left behind after a failed import | ✅ **26/26** in total |
+| Live API | curl: `.txt` and `.md` return 201, `.pdf` returns 400 with a message, a 6 MB file returns 413 | ✅ |
+| Browser E2E (import) | 16 checks: UI hint and `accept` filter; `.docx`, `.md` and `.txt` import and open in the editor with formatting and a title from the filename; edit, save and reload an imported doc; toolbar state on imported formatting; docs appear in the list; client-side rejection of `.pdf`, empty and >5 MB files (and no request is sent); server-side rejection of a corrupt `.docx`; re-selecting the same file after an error; drag-and-drop (overlay, import, multiple files, unsupported type); mobile layout | ✅ **16/16** after the fix |
+| Regression | Round 1's 21-check core browser suite, lint, types, build, `npm audit`, `pip-audit` (including the new dependencies) | ✅ 21/21, no vulnerabilities |
+| Resilience | Import while the backend is down | ✅ "Can't reach the server" message, and the button is re-enabled |
+
+### Issues found
+
+| # | Severity | Issue | How found | Fix | Status |
+|---|---|---|---|---|---|
+| T13 | 🟠 Medium | **Underline dropped from `.docx` imports.** mammoth ignores underline by default, because underline isn't semantic formatting. | Browser E2E with a generated `.docx` | Added `style_map="u => u"`. The backend test now covers underline. | ✅ Fixed |
+| T14 | ⚪ Info | One core browser check depended on data left over from round 1, so it failed after a database reset. | Regression run | The check now creates its own data. | ✅ Fixed (test only) |
+| T15 | ⚪ Info | FastAPI and python-multipart receive the whole upload before the endpoint can reject it for size, so the 5 MB check runs after the upload is received. | Code review | Acceptable locally. In production, also set a request body limit at the host or proxy. | 📝 Tracked |
+| T16 | ⚪ Info | `.docx` images and tables aren't imported (only table text is kept), and `.doc` and PDF aren't supported. | By design | Documented in the README and the UI. | 📝 Known limitation |
+
+### Manual checks for import
+1. On **My documents**, click **⬆ Import file** and pick a `.docx` file. It opens in the editor with headings, bold, italic, underline and lists.
+2. Drag a `.md` file onto the page. A blue dashed overlay appears; drop it and the document opens.
+3. Try a `.pdf` or an image. You see a red message listing the supported types, and nothing is created.
+4. Edit an imported document, press Cmd/Ctrl+S, and refresh. The changes are kept.
 
 ---
 
@@ -76,4 +105,5 @@ Open **http://localhost:5173** with both servers running (see the README). Each 
 
 ## Follow-ups
 - Add the browser E2E checks to the repo as a proper Playwright test suite (`frontend/e2e/`) so anyone can run them.
-- Write tests alongside each upcoming feature: file upload (allowed types, size limits, conversion) and sharing (owner vs. shared access, and a 403 for users without access).
+- Write tests alongside the sharing feature: owner vs. shared access, and a 403 for users without access.
+- Set an upload body-size limit at the hosting layer when deploying (T15).
