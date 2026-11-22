@@ -5,7 +5,7 @@ A small full-stack document editor inspired by Google Docs. It is built for an A
 The goal is not to clone Google Docs. It is to ship the strongest working version within the timebox, showing product judgment, full-stack capability, and clear prioritization.
 
 > **Status:** In progress. Document creation, the rich-text editor, rename, and save/reopen work locally. Upload, sharing, and deployment are next.
-> The AI-assisted development process is logged in [AI_WORKFLOW.md](AI_WORKFLOW.md).
+> The AI-assisted development process is logged in [AI_WORKFLOW.md](AI_WORKFLOW.md), and test rounds and issues are tracked in [TESTING.md](TESTING.md).
 
 ---
 
@@ -91,10 +91,10 @@ backend/                FastAPI + SQLModel + SQLite
   app/models.py         Document table + request/response schemas and validation
   app/database.py       Engine and session (DATABASE_URL, defaults to sqlite:///./app.db)
   app/sanitize.py       HTML allowlist sanitizer (nh3)
-  tests/                pytest suite (in-memory SQLite)
+  tests/                pytest suite (in-memory SQLite via conftest.py)
 frontend/               React + TypeScript + Vite
   src/api.ts            Typed fetch wrapper for the API
-  src/pages/            DocumentList, DocumentEditor
+  src/pages/            DocumentList, DocumentEditor (with unsaved-changes guard)
   src/components/       Toolbar (TipTap formatting buttons)
 ```
 
@@ -122,7 +122,7 @@ Open http://localhost:5173. Vite forwards `/api/*` requests to the backend on po
 
 **3. Tests and checks**
 ```bash
-cd backend && source .venv/bin/activate && pytest   # 9 API tests
+cd backend && source .venv/bin/activate && pytest   # 12 API tests
 cd frontend && npm run lint && npm run build        # lint + type-check + production build
 ```
 
@@ -141,7 +141,7 @@ cd frontend && npm run lint && npm run build        # lint + type-check + produc
 ## Security notes
 
 - **No secrets in the repo.** The app needs no API keys. `.env*`, key and certificate files, local databases, virtual environments, and `node_modules` are all ignored by git.
-- **XSS:** document HTML is sanitized on the server against a strict tag allowlist (`nh3`) before it's stored, and the editor renders content through TipTap, never through raw `innerHTML`.
+- **XSS:** document HTML is sanitized on the server against a strict tag allowlist (`nh3`) before it's stored. Links are limited to `http`, `https` and `mailto`, and the editor renders content through TipTap, never through raw `innerHTML`.
 - **Input validation:** titles are trimmed and must be 1–200 characters. Content is limited to about 1 MB. Invalid input returns `422` with a readable message.
 - **SQL injection:** all queries go through SQLModel/SQLAlchemy with bound parameters.
 - **CORS:** not enabled. The API is same-origin only (Vite proxy in development, one service in production).
@@ -174,7 +174,12 @@ The full log is in [AI_WORKFLOW.md](AI_WORKFLOW.md). Summary:
 
 ## 5. How I checked the output
 
-_To be completed:_ tests, edge cases, and bugs found.
+See [TESTING.md](TESTING.md) for the full log. Round 1 so far:
+- **Automated:** 12 backend tests, lint, type-check and build, and dependency audits.
+- **API edge cases:** 25 live checks.
+- **Browser:** 21 headless-Chrome end-to-end checks, including mobile, plus a backend-down resilience test.
+- **Fixed:** 9 issues. The most important were links and rules being silently deleted on save, unsaved edits lost on in-app navigation, the Save button hidden on mobile, and a huge id causing a 500.
+- [TESTING.md](TESTING.md) also has a manual test checklist.
 
 ## 6. Tradeoffs & next steps
 

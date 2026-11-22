@@ -9,11 +9,20 @@ export interface Doc extends DocumentSummary {
   created_at: string
 }
 
+const OFFLINE_MESSAGE = "Can't reach the server. Check that it's running and try again."
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const res = await fetch(`/api${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  })
+  let res: Response
+  try {
+    res = await fetch(`/api${path}`, {
+      headers: { 'Content-Type': 'application/json' },
+      ...options,
+    })
+  } catch {
+    throw new Error(OFFLINE_MESSAGE) // network error: server down or no connection
+  }
+  // 502/503/504 come from the dev proxy (or a host) when the API is unreachable.
+  if ([502, 503, 504].includes(res.status)) throw new Error(OFFLINE_MESSAGE)
   if (!res.ok) {
     // FastAPI returns { detail: string } for HTTP errors and
     // { detail: [{ msg }] } for validation errors.

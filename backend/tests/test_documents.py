@@ -77,3 +77,28 @@ def test_oversized_content_rejected(client):
     too_big = "<p>" + "a" * MAX_CONTENT_LENGTH + "</p>"
     assert client.patch(f"/api/documents/{doc_id}", json={"content": too_big}).status_code == 422
     assert client.post("/api/documents", json={"content": too_big}).status_code == 422
+
+
+def test_links_and_rules_kept_but_unsafe_urls_stripped(client):
+    doc_id = client.post("/api/documents", json={}).json()["id"]
+    html = (
+        '<p><a href="https://example.com" target="_blank">ok</a></p><hr>'
+        '<p><a href="javascript:alert(1)">bad</a></p>'
+    )
+    content = client.patch(f"/api/documents/{doc_id}", json={"content": html}).json()["content"]
+    assert 'href="https://example.com"' in content
+    assert "<hr>" in content
+    assert "javascript:" not in content
+
+
+def test_out_of_range_id_returns_404_not_500(client):
+    assert client.get("/api/documents/99999999999999999999999").status_code == 404
+    assert client.get("/api/documents/-1").status_code == 404
+
+
+def test_noop_update_does_not_bump_updated_at(client):
+    doc = client.post("/api/documents", json={"title": "Same"}).json()
+    after = client.patch(f"/api/documents/{doc['id']}", json={"title": "Same"}).json()
+    assert after["updated_at"] == doc["updated_at"]
+    after_empty = client.patch(f"/api/documents/{doc['id']}", json={}).json()
+    assert after_empty["updated_at"] == doc["updated_at"]

@@ -87,6 +87,32 @@ Copy this template for each meaningful prompt or decision:
 - **Decision:** Public repo, default branch `main`.
 - **Result:** https://github.com/koshtiakanksha/ajaia-assessment. `main` tracks `origin/main`.
 
+### #6: Local test round 1 (frontend + backend)
+- **Date:** 2026-11-22
+- **Prompt:** "Let's test what we've built so far, both frontend and backend locally. Check for any errors, keep track of them, and give me the URL so I can test manually too."
+- **AI output:**
+  - Tested in layers:
+    1. A fresh clone from GitHub, following the README.
+    2. pytest.
+    3. 25 live API edge-case checks with curl.
+    4. Lint, type-check and build.
+    5. A 21-check headless-Chrome suite, including a mobile viewport.
+    6. A backend-down resilience test.
+  - Created **TESTING.md** with the issue table (T1–T12) and a manual test checklist.
+- **Issues found and fixed:**
+  - Links and rules were silently deleted on save (sanitizer vs. StarterKit mismatch).
+  - Unsaved edits were lost on in-app navigation. Fixed with the data router and `useBlocker`.
+  - The Save button was off-screen on mobile.
+  - A huge id caused a 500.
+  - A no-op save bumped "last edited".
+  - Long titles overflowed the list.
+  - Offline errors were unfriendly.
+  - Tests touched the real `app.db`.
+  - Huge ids in the frontend URL showed a raw validation message.
+- **Decision:** Fixed everything that was small and contained. For links, I **expanded the allowlist** (with safe URL schemes only) instead of disabling links in the editor, because links are useful in documents and nh3 already blocks `javascript:` URLs. Deferred one item: the httpx deprecation warning, which has no impact.
+- **Note on testing approach:** a first run of the browser suite showed 15 failures that cascaded from one harness problem. My test auto-dismissed the "unsaved changes" prompt, so the page never navigated. After fixing the harness, the 4 remaining failures were real bugs.
+- **Result:** 12/12 pytest, 21/21 browser checks, lint, types and build clean. Local database reset to empty for manual testing.
+
 ---
 
 ## Key decisions (running summary)
@@ -104,3 +130,6 @@ Copy this template for each meaningful prompt or decision:
 | D9 | Load the document before mounting the TipTap editor | Avoids StrictMode and stale-response bugs, and is simpler than calling `setContent` after mount | Implemented |
 | D10 | Limit document content to about 1 MB | Cheap protection against oversized requests | Implemented |
 | D11 | No secrets in the repo: config via env vars, `.env*` ignored | Safe to publish the repo; ready for deployment config later | Implemented |
+| D12 | Sanitizer allows `<a href>` (http, https, mailto only) and `<hr>` | Match what the editor can produce, so formatting is never silently lost | Implemented |
+| D13 | Use React Router's data router (`createBrowserRouter`) with `useBlocker` | Needed to warn before in-app navigation discards unsaved edits | Implemented |
+| D14 | Only bump `updated_at` on real changes | Keeps "last edited" and list order truthful | Implemented |

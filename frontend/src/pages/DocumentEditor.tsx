@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useBlocker, useParams } from 'react-router-dom'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { api, type Doc } from '../api'
@@ -17,7 +17,7 @@ const STATUS_TEXT: Record<SaveState, string> = {
 /** Loads the document, then mounts the editor with its content. */
 export default function DocumentEditorPage() {
   const docId = Number(useParams().id)
-  const validId = Number.isInteger(docId) && docId > 0
+  const validId = Number.isSafeInteger(docId) && docId > 0
   const [doc, setDoc] = useState<Doc | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
 
@@ -84,13 +84,23 @@ function DocumentEditor({ doc }: { doc: Doc }) {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [save])
 
-  // Warn before closing the tab with unsaved changes.
+  const hasUnsavedChanges = saveState === 'dirty' || saveState === 'error'
+
+  // Warn before closing/reloading the tab with unsaved changes...
   useEffect(() => {
-    if (saveState !== 'dirty' && saveState !== 'error') return
+    if (!hasUnsavedChanges) return
     const onBeforeUnload = (e: BeforeUnloadEvent) => e.preventDefault()
     window.addEventListener('beforeunload', onBeforeUnload)
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
-  }, [saveState])
+  }, [hasUnsavedChanges])
+
+  // ...and before in-app navigation (links, browser back/forward).
+  const blocker = useBlocker(hasUnsavedChanges)
+  useEffect(() => {
+    if (blocker.state !== 'blocked') return
+    if (window.confirm('You have unsaved changes. Leave without saving?')) blocker.proceed()
+    else blocker.reset()
+  }, [blocker])
 
   return (
     <section className="editor-page">
