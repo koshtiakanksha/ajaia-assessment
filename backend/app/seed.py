@@ -16,14 +16,27 @@ def seed_demo_data(session: Session) -> None:
         title="Welcome to Ajaia Docs",
         content=(
             "<h1>Welcome to Ajaia Docs 👋</h1>"
-            "<p>This document is owned by <strong>Alice</strong>. "
-            "It's shared with <strong>Bob</strong> as an <em>editor</em> and "
-            "<strong>Carol</strong> as a <em>viewer</em>.</p>"
-            "<h2>Try it</h2><ul>"
-            "<li><p>Sign in as different users (top right) to see how access changes.</p></li>"
-            "<li><p>Use <strong>Share</strong> to invite anyone by email.</p></li>"
-            "<li><p>Import a .txt, .md or .docx file from the documents page.</p></li>"
+            "<p>This document is owned by <strong>Alice</strong>. It's shared with "
+            "<strong>Bob</strong> as an <em>editor</em> and <strong>Carol</strong> as a <em>viewer</em>. "
+            "Sign in as each of them to see how access changes.</p>"
+            "<h2>Try it</h2>"
+            '<ul data-type="taskList">'
+            '<li data-type="taskItem" data-checked="true"><label><input type="checkbox" checked=""><span></span></label>'
+            "<div><p>Open this document</p></div></li>"
+            '<li data-type="taskItem" data-checked="false"><label><input type="checkbox"><span></span></label>'
+            "<div><p>Click <strong>Share</strong> and invite anyone by email as a viewer or editor</p></div></li>"
+            '<li data-type="taskItem" data-checked="false"><label><input type="checkbox"><span></span></label>'
+            "<div><p>Import a .txt, .md or .docx file from the documents page</p></div></li>"
             "</ul>"
+            "<h2>Formatting, like you'd expect</h2>"
+            '<p><span style="font-family: Georgia, serif;">Fonts</span>, '
+            '<span style="font-size: 16pt;">sizes</span>, '
+            '<span style="color: #1b3fa3;">colors</span>, '
+            '<mark data-color="#fff59d" style="background-color: #fff59d; color: inherit;">highlights</mark>, '
+            "<strong>bold</strong>, <em>italic</em>, <u>underline</u> and <s>strikethrough</s>.</p>"
+            '<p style="text-align: center;">Center, right or justify paragraphs.</p>'
+            "<ol><li><p>Numbered lists</p></li><li><p>Bulleted lists and checklists</p></li></ol>"
+            "<blockquote><p>Everything saves automatically. There's no Save button.</p></blockquote>"
         ),
     )
     notes = Document(

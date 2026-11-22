@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { api, AUTH_EXPIRED_EVENT, type User } from '../api'
-import { AuthContext, unsavedChanges } from './context'
+import { AuthContext, pendingSave } from './context'
 import Login from './Login'
 
 /** Renders the sign-in screen until a user is signed in, then the app. */
@@ -15,8 +15,11 @@ export default function AuthGate({ children }: { children: (user: User) => React
   }, [])
 
   async function logout() {
-    if (unsavedChanges.current && !window.confirm('You have unsaved changes. Sign out without saving?')) return
-    unsavedChanges.current = false
+    // Save any pending edits first; only ask if they can't be saved.
+    if (pendingSave.current && !(await pendingSave.current())) {
+      if (!window.confirm('Your latest changes could not be saved. Sign out anyway?')) return
+    }
+    pendingSave.current = null
     await api.logout().catch(() => {})
     setUser(null)
   }

@@ -16,7 +16,8 @@ export function useAuth(): AuthValue {
 }
 
 /**
- * Set by the editor while it has unsaved changes, so signing out can warn
- * first (sign-out isn't a navigation, so the router's blocker can't catch it).
+ * Set by the editor while it has unsaved changes: a function that saves them
+ * now and resolves to whether that worked. Signing out calls it first
+ * (sign-out isn't a navigation, so the router's blocker can't catch it).
  */
-export const unsavedChanges = { current: false }
+export const pendingSave: { current: (() => Promise<boolean>) | null } = { current: null }

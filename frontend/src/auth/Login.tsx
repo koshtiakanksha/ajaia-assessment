@@ -32,7 +32,11 @@ export default function Login({ onSignedIn }: { onSignedIn: (user: User) => void
   return (
     <div className="login-page">
       <section className="login-card">
-        <h1>Ajaia Docs</h1>
+        <div className="login-brand">
+          <img src="/brand/ajaia-logo.png" alt="Ajaia" height={30} />
+          <span className="brand-product">Docs</span>
+        </div>
+        <h1 className="sr-only">Sign in to Ajaia Docs</h1>
         <p className="muted">Demo sign-in: no password needed. Pick an account or use any email.</p>
 
         <div className="demo-users">

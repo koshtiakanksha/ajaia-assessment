@@ -5,14 +5,60 @@ This file tracks how the app is tested, which issues were found, and their statu
 ## How to run the automated checks
 
 ```bash
-# Backend: 55 API tests (documents, import, auth and sharing; in-memory DB, never touches app.db)
+# Backend: 77 API tests (documents, import, auth and sharing, sanitizer, app/SPA serving; in-memory DB)
 cd backend && source .venv/bin/activate && pytest
 
 # Frontend: lint + type-check + production build
 cd frontend && npm run lint && npm run build
 ```
 
-Browser end-to-end checks ran in headless Chrome (playwright-core) against the local dev servers. Those scripts aren't in the repo yet; see the follow-ups below.
+**Browser end-to-end suites** (headless Chrome via playwright-core, run against a running app):
+
+| Suite | Checks | Covers |
+|---|---|---|
+| core | 10 | XSS titles, stored style injection, bad routes, back/forward, double-click create, long titles |
+| editor | 20 | Docs header and menus, **autosave** (including offline recovery), every toolbar format round trip, menus, word count, downloads, print layout, save on navigate and on sign-out, viewer restrictions, mobile |
+| import | 16 | `.txt`, `.md` and `.docx` import, drag-and-drop, client and server rejections, mobile |
+| sharing | 23 | Four simultaneous users: share, roles, revoke, newcomer by email, enforcement, sign-out, mobile |
+
+Each suite was run against **both** the dev servers (`localhost:5173`) **and** the production Docker image with Postgres (`BASE=http://localhost:8080`). These scripts aren't in the repo yet; moving them into a Playwright suite in CI is a listed next step.
+
+---
+
+## Round 4: 2026-11-22 (Docs-style UI, formatting, autosave, Ajaia brand, deployment)
+
+### What was tested
+
+| Layer | What | Result |
+|---|---|---|
+| Backend unit | 22 new tests: **sanitizer** (each new format survives: alignment, font family and size, color, highlight, line height, checklists; unsafe CSS stripped: `position`, `url(javascript:…)`, `expression()`, CSS escapes, `behavior`, markup in values; bad `data-*` and `input` attributes), **app** (request size limit before the body is read, API docs moved to `/api/docs`, SPA fallback for client routes without swallowing unknown `/api` paths, Postgres URL normalization) | ✅ **77/77** in total |
+| Browser E2E (editor) | 20 checks: Docs header (no Save button), **autosave** status and persistence, rename with empty-title revert, **22 formats round-tripped through autosave and reload**, toolbar state at the cursor (font, size, heading size, alignment), clear formatting, undo/redo, the menu bar (Format → Bold, Insert → HR, Edit → Undo, hover switching, Esc), word count, `.txt`/`.html` downloads, print CSS, **save-then-leave with no prompt**, **backend killed mid-edit → "Offline. Retrying…" → automatic recovery**, **save on sign-out**, viewer menus disabled, heading-aware font size, mobile | ✅ **20/20** |
+| Regression | Updated core (10), import (16) and sharing (23) suites for the new UI (Blank document tile, account menu, autosave instead of the Save button) | ✅ 10/10, 16/16, 23/23 (sharing run twice in a row for stability) |
+| **Production rehearsal** | Built the **Render Docker image**, ran it against **Postgres 16** with `COOKIE_SECURE=1`: health, SPA routes, brand assets, seeding into Postgres, and a `Secure; HttpOnly; SameSite=Lax` cookie. Then ran **all 69 browser checks against the container** | ✅ 69/69 (after fix T23) |
+| Visual | Screenshots of sign-in, home, editor, menus, formatted doc, share dialog, viewer, and mobile editor and home, reviewed by eye | ✅ after T24 and T25 |
+| Audits | `npm audit` and `pip-audit` including the new packages (TipTap extensions, lucide-react, Inter, psycopg) | ✅ 0 known vulnerabilities |
+
+### Issues found
+
+| # | Severity | Issue | How found | Fix | Status |
+|---|---|---|---|---|---|
+| T23 | 🟠 Medium | **Text typed right after entering a font size went into the size box, not the document**, and only in the **production build**. TipTap's `focus()` waits a frame, and the optimized build let keystrokes arrive first. | Browser suite against the **Docker image** (it passed against the dev server) | Toolbar actions now call `editor.view.focus()` synchronously; Enter and Escape in the size box return focus at once | ✅ Fixed |
+| T24 | 🟡 Low | The font size showed "11" inside headings (which are 20, 16 or 13pt), unlike Docs. | Screenshot review | The size shown and the +/− steps follow the paragraph style's default size | ✅ Fixed (test added) |
+| T25 | 🟡 Low | The title box was a fixed width, leaving a gap before "All changes saved". | Screenshot review | The title sizes itself to its text, like Docs | ✅ Fixed |
+| T26 | 🟡 Low | nh3 rewrites styles (`text-align:center`, `Georgia , serif`); the stray space before commas would stop the font dropdown recognizing the font. | Sanitizer unit tests | Normalize after cleaning; tests compare the compact form | ✅ Fixed |
+| T27 | 🟡 Low | **New formatting would have been stripped on save.** The old sanitizer removed all `style` attributes, so fonts, colors, alignment and line spacing would vanish on reload, the same class of bug as T1. | Designed in before building the UI (sanitizer first) | CSS property allowlist with value checks, plus checklist attributes | ✅ Prevented |
+| T28 | 🟡 Low | With autosave, the old "Leave / Sign out without saving?" prompts would have appeared needlessly. | Design review | Leaving and signing out **save first**, and only ask if saving fails (tested both ways, including offline) | ✅ Fixed |
+| T29 | 🟡 Low | Lint: autosave's retry referenced `flush` during its own initialization; refs passed to a render-time helper. | `oxlint` | A ref for the recursive retry; the menu builder became a hook | ✅ Fixed |
+| T30 | 🟠 Medium | **Render free instances have no persistent disk**, so SQLite data would be wiped on every deploy or restart. | Deployment research | Added Postgres (psycopg 3, URL normalization, `pool_pre_ping`); Render Blueprint provisions the database | ✅ Fixed |
+| T31 | 🟡 Low | FastAPI's Swagger UI at `/docs` collided with the app's `/docs/:id` document URLs once FastAPI serves the UI. | Code review while adding SPA serving | Moved API docs to `/api/docs` and `/api/openapi.json` | ✅ Fixed |
+| T32 | ⚪ Info | Closes **T15**: oversized uploads were only rejected after being received. | — | Middleware rejects requests over 5.5 MB by `Content-Length` before the body is read (test added) | ✅ Fixed |
+| T33 | ⚪ Info | Test-only fixes: ambiguous labels ("Font" also matched "Decrease font size"), demo users counted before loading, navigation before sign-in finished, and a badge-order assumption. | Browser suites | Exact selectors and explicit waits | ✅ Fixed (tests only) |
+
+### Manual checks for round 4
+1. Open **Welcome to Ajaia Docs**. Change the font, size, color and highlight, align a paragraph, add a checklist. "Saving…" turns into "All changes saved". Refresh, and everything is still there.
+2. Try **File → Download as plain text**, **View → Word count** and **Insert → Horizontal line**.
+3. Stop the backend, type something, and see "Offline. Retrying…". Start it again and the status returns to "All changes saved" by itself.
+4. Sign in as **Carol** (viewer). There's no toolbar, and the Format menu items are greyed out.
 
 ---
 
@@ -67,7 +113,7 @@ Browser end-to-end checks ran in headless Chrome (playwright-core) against the l
 |---|---|---|---|---|---|
 | T13 | 🟠 Medium | **Underline dropped from `.docx` imports.** mammoth ignores underline by default, because underline isn't semantic formatting. | Browser E2E with a generated `.docx` | Added `style_map="u => u"`. The backend test now covers underline. | ✅ Fixed |
 | T14 | ⚪ Info | One core browser check depended on data left over from round 1, so it failed after a database reset. | Regression run | The check now creates its own data. | ✅ Fixed (test only) |
-| T15 | ⚪ Info | FastAPI and python-multipart receive the whole upload before the endpoint can reject it for size, so the 5 MB check runs after the upload is received. | Code review | Acceptable locally. In production, also set a request body limit at the host or proxy. | 📝 Tracked |
+| T15 | ⚪ Info | FastAPI and python-multipart receive the whole upload before the endpoint can reject it for size, so the 5 MB check runs after the upload is received. | Code review | Fixed in round 4 (T32): oversized requests are rejected before the body is read. | ✅ Fixed |
 | T16 | ⚪ Info | `.docx` images and tables aren't imported (only table text is kept), and `.doc` and PDF aren't supported. | By design | Documented in the README and the UI. | 📝 Known limitation |
 
 ### Manual checks for import
@@ -121,21 +167,21 @@ Browser end-to-end checks ran in headless Chrome (playwright-core) against the l
 
 ## Manual test checklist
 
-Open **http://localhost:5173** with both servers running (see the README). Each item below has an expected result.
+Open the app (locally **http://localhost:5173**, or the Render URL) and sign in as **Alice Johnson**.
 
-1. **Create:** click **+ New document**. You land in the editor, titled "Untitled document".
-2. **Rename:** change the title and press **Save**. The status shows "All changes saved". Go back to the list and the new title is there.
-3. **Format:** try **B**, *I*, U, H1–H3, • List and 1. List from the toolbar and the keyboard (Cmd/Ctrl+B, I, U). Buttons highlight when the cursor is inside formatted text.
-4. **Markdown shortcuts:** type `# ` for a heading, `- ` for a bullet, `1. ` for a numbered list, `> ` for a quote, `---` for a horizontal rule, or paste a URL to get a link.
-5. **Persistence:** save with **Cmd/Ctrl+S** and refresh the page. Everything looks identical.
-6. **Unsaved guard:** type something without saving, then click "← Documents" or the browser Back button. You're asked to confirm. **Cancel** keeps your text.
-7. **Validation:** clear the title and save. You see "Title cannot be empty" in red. Fix the title and save; the error disappears.
-8. **Not found:** visit http://localhost:5173/docs/99999. You see "Document not found" and a back link.
-9. **Mobile:** use browser dev tools at a phone width. The Save button is visible and nothing scrolls sideways.
-10. **API docs:** visit http://localhost:8001/docs to try the endpoints directly.
+1. **Create:** click **Blank document**. The editor opens with the title "Untitled document".
+2. **Autosave and rename:** type something and rename the title. "Saving…" turns into "All changes saved". Refresh, and everything is kept.
+3. **Format:** try the paragraph style, font, size (−/+ or type a number), bold, italic, underline, strikethrough, text color, highlight, alignment, line spacing, lists, checklist and link (⌘/Ctrl+K). Toolbar buttons light up to match the text at the cursor.
+4. **Menus:** File (download, print), Edit (undo/redo), View (word count), Insert (horizontal line, quote), Format (styles, alignment, clear formatting).
+5. **Import:** on the home page, drag a `.docx` or `.md` file onto the page. It opens as a new document with its formatting.
+6. **Share:** in "Welcome to Ajaia Docs", click **Share**, add `dana@example.com` as an Editor, then sign in as Dana (avatar menu → Sign out → type the email). The document is under **Shared with me**, and Dana can edit it.
+7. **Viewer:** sign in as **Carol**. "Welcome to Ajaia Docs" is view-only: no toolbar, and editing menus are greyed out.
+8. **Revoke:** as Alice, click **Remove** next to Bob. Bob's next save shows "You don't have access to this document".
+9. **Errors:** visit `/docs/99999` ("Document not found"), or try importing a `.pdf` (a clear error listing the supported types).
+10. **Mobile:** at a phone width (dev tools), the toolbar wraps and nothing scrolls sideways.
 
 ---
 
 ## Follow-ups
-- Add the browser E2E checks to the repo as a proper Playwright test suite (`frontend/e2e/`) so anyone can run them.
-- Set an upload body-size limit at the hosting layer when deploying (T15).
+- Add the browser E2E checks to the repo as a Playwright suite (`frontend/e2e/`) and run them in CI against the Docker image.
+- Add Alembic migrations before the next schema change.

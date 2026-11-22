@@ -55,6 +55,10 @@ export interface Doc extends DocumentSummary {
 
 const OFFLINE_MESSAGE = "Can't reach the server. Check that it's running and try again."
 
+function offlineError(): Error {
+  return Object.assign(new Error(OFFLINE_MESSAGE), { retryable: true })
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   let res: Response
   try {
@@ -65,10 +69,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
       headers: isJson ? { 'Content-Type': 'application/json' } : undefined,
     })
   } catch {
-    throw new Error(OFFLINE_MESSAGE) // network error: server down or no connection
+    throw offlineError() // network error: server down or no connection
   }
   // 502/503/504 come from the dev proxy (or a host) when the API is unreachable.
-  if ([502, 503, 504].includes(res.status)) throw new Error(OFFLINE_MESSAGE)
+  if ([502, 503, 504].includes(res.status)) throw offlineError()
   if (res.status === 401 && path !== '/auth/login') window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT))
   if (!res.ok) {
     // FastAPI returns { detail: string } for HTTP errors and

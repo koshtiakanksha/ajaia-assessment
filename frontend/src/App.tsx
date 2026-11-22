@@ -1,33 +1,25 @@
-import { Link, Outlet } from 'react-router-dom'
+import { Link, Outlet, useMatch } from 'react-router-dom'
 import AuthGate from './auth/AuthGate'
-import { useAuth } from './auth/context'
-import Avatar from './components/Avatar'
+import UserMenu from './components/UserMenu'
 
-function UserMenu() {
-  const { user, logout } = useAuth()
-  return (
-    <div className="user-menu">
-      <Avatar user={user} size={28} />
-      <span className="user-name" title={user.email}>{user.name}</span>
-      <button className="link-button" onClick={logout}>Sign out</button>
-    </div>
-  )
-}
-
-/** App shell: header + the current page, for signed-in users only. */
+/** App shell for signed-in users. The editor page renders its own Docs-style header. */
 export default function App() {
+  const inEditor = useMatch('/docs/:id')
   return (
     <AuthGate>
       {(user) => (
         <div className="app">
-          <header className="app-header">
-            <Link to="/" className="brand">Ajaia Docs</Link>
-            <UserMenu />
-          </header>
-          <main>
-            {/* key: re-render pages from scratch when switching accounts */}
-            <Outlet key={user.id} />
-          </main>
+          {!inEditor && (
+            <header className="app-header">
+              <Link to="/" className="brand" aria-label="Ajaia Docs home">
+                <img src="/brand/ajaia-logo.png" alt="Ajaia" height={22} />
+                <span className="brand-product">Docs</span>
+              </Link>
+              <UserMenu />
+            </header>
+          )}
+          {/* key: re-render pages from scratch when switching accounts */}
+          <Outlet key={user.id} />
         </div>
       )}
     </AuthGate>

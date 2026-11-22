@@ -166,6 +166,38 @@ Copy this template for each meaningful prompt or decision:
   - Kept the session cookie approach (no JWT or localStorage), so there's no token handling in JavaScript and the cookie is `HttpOnly`.
 - **Result:** 55/55 pytest; 23/23 sharing, 21/21 core and 16/16 import browser checks; lint, types and build clean; 0 known vulnerabilities.
 
+### #9: Planning the remaining work
+- **Date:** 2026-11-22
+- **Prompt:** "What else is remaining to pass all the requirements and make it look similar to Google Docs (editing style, fonts, font size, tabs, alignment…)? And can you make the UI look closer to Ajaia, using the company colors?"
+- **AI output:** Listed the remaining requirements (public deployment, architecture note, README write-up), a Docs-parity plan (menu bar, toolbar formatting, paper page, autosave, Docs-style header and home), and a sanitizer caveat: new inline styles would be stripped unless allowlisted. It looked up Ajaia's brand on **ajaia.ai**: navy `#001D6B`, deep blue `#1B3FA3`, sky `#97C2F8`, paper `#F1F7FF`, Inter. It asked whether "tabs" meant document tabs or the menu bar, which host to use, and whether to use the real logo.
+- **Decision:** The user chose the **menu bar**, **Render**, and **Ajaia's actual logo**.
+
+### #10: Docs-style UI, formatting, autosave, Ajaia brand, Render deployment
+- **Date:** 2026-11-22
+- **Prompt:** "Make the UI feel more like Google Docs (the menu bar works). Use Render for hosting, and use Ajaia's actual logo, text style and colors. Add autosave and other useful formatting features, complete the documentation, and push to GitHub."
+- **AI output:**
+  - **Sanitizer first** (to avoid repeating the "formatting silently stripped" bug from T1): allowed `style` with a CSS property allowlist (font-family, font-size, color, background-color, text-align, line-height), **value checks** (no `url(`, `expression(`, escapes or markup) and checklist attributes. 22 new tests.
+  - **Editor:** TipTap add-ons for font family and size, color, highlight, alignment, checklists, word count and placeholder, plus a small custom extension for paragraph line spacing. A **toolbar** (undo/redo/print, style, font, −/size/+, B/I/U/S, color and highlight pickers, link, alignment, spacing, lists, indent, clear formatting) and a **menu bar** (File, Edit, View, Insert, Format) with shortcuts. A link bar, downloads (`.html`/`.txt`), and print CSS.
+  - **Autosave** (`useAutosave`): 800 ms debounce, one save at a time, re-save if edits arrive mid-save, automatic retry when offline ("Offline. Retrying…"), and permanent errors shown. Leaving the page or signing out **saves first** and only asks if that fails. The Save button was removed; Cmd/Ctrl+S saves immediately.
+  - **Docs layout and Ajaia brand:** the logo and "Docs" wordmark, the "A" icon as app icon and favicon, Inter, the brand palette, a paper page on a tinted canvas, a sticky header and toolbar, an avatar account menu, and a home page with "Start a new document" tiles plus document tables (Owner, Last modified).
+  - **Deployment:**
+    - FastAPI serves the built React app (SPA fallback); API docs moved to `/api/docs`.
+    - **Postgres** support, because the Render free tier has no persistent disk for SQLite.
+    - A request-size middleware.
+    - A multi-stage **Dockerfile** (non-root user), and a **`render.yaml` Blueprint** (Docker web service + free Postgres, generated `SECRET_KEY`, `COOKIE_SECURE=1`).
+    - Split `requirements.txt` (runtime) from `requirements-dev.txt` (tests).
+  - **Production rehearsal:** built the Render image locally, ran it against Postgres 16, and ran all **69 browser checks** against it as well as against the dev servers.
+  - **Docs:** a new `ARCHITECTURE.md`; the README rewritten for reviewers (screenshots, features, scope table, quick start, Render steps, API, and all six assessment sections filled in); TESTING.md round 4 (T23–T33) with a refreshed manual checklist; and a richer seeded welcome document that demonstrates the formatting.
+- **Problems found and fixed:**
+  - **Font-size focus race (T23).** Only the production build showed it: text typed after pressing Enter in the size box landed in the box. TipTap's `focus()` is deferred a frame; the fix is a synchronous `view.focus()`.
+  - The font size showed "11" in headings, and the title box was a fixed width (both from screenshot review).
+  - nh3 style re-serialization (`Georgia , serif`).
+  - Lint issues in the autosave retry and ref usage.
+  - SQLite on Render would lose data, so I switched to Postgres.
+  - `/docs` (Swagger) collided with the app's `/docs/:id` routes.
+- **Decisions:** see D23–D28 below.
+- **Result:** 77/77 pytest; browser checks 10/10 core, 20/20 editor, 16/16 import and 23/23 sharing on **both** dev and Docker+Postgres; lint, types and build clean; 0 known vulnerabilities. The Render deploy itself needs the user's Render account (Blueprint → Apply), and the live URL goes into the README afterwards.
+
 ---
 
 ## Key decisions (running summary)
@@ -176,7 +208,7 @@ Copy this template for each meaningful prompt or decision:
 | D2 | "Collaboration" in the MVP = shared access, not real-time co-editing | Real-time editing (CRDTs, WebSockets) is high-risk within a timebox. TipTap keeps the upgrade path open | Accepted |
 | D3 | Store document content as server-sanitized HTML | Preserves formatting, works for all import formats, and prevents XSS | Implemented |
 | D4 | Simulated auth with seeded users | Allowed by the brief, and keeps the focus on ownership and sharing logic | Implemented |
-| D5 | A single deployable service (FastAPI serves the React build) | One URL and no CORS setup in production, which makes deployment simpler | Accepted (deployment pending) |
+| D5 | A single deployable service (FastAPI serves the React build) | One URL and no CORS setup in production, which makes deployment simpler | Implemented |
 | D6 | Stack: FastAPI + SQLModel/SQLite, React + TypeScript + Vite, TipTap | Confirmed by the user in #3 | Implemented |
 | D7 | Backend runs on port 8001 in development; Vite forwards `/api` to it | Port 8000 is used by another local project | Implemented |
 | D8 | Explicit Save (button and Cmd/Ctrl+S) for now; autosave later | Simplest reliable behavior first. Autosave is additional feature #1 | Implemented |
@@ -194,3 +226,9 @@ Copy this template for each meaningful prompt or decision:
 | D20 | One permission helper (`load_document(need=…)`) used by every endpoint | One place to get authorization right; specific 403 messages | Implemented |
 | D21 | Signed `HttpOnly` session cookie; `SECRET_KEY` from the environment | No tokens in JavaScript, no secrets in the repo, basic CSRF protection via SameSite=Lax | Implemented |
 | D22 | Missing doc → 404, no access → 403 | Lets the UI show "You don't have access", like Google Docs | Implemented |
+| D23 | Inline styles allowed through a CSS **property allowlist with value checks** | Fonts, colors, alignment and spacing must round-trip without opening CSS injection | Implemented |
+| D24 | **Autosave** replaces the Save button; leaving or signing out saves first | Docs behavior; the only prompt is when saving actually fails | Implemented |
+| D25 | Menu bar (File, Edit, View, Insert, Format) instead of document tabs | The user's choice; mostly UI, no schema change | Implemented |
+| D26 | Ajaia brand: real logo and icon, Inter, navy/sky palette from ajaia.ai | The user asked for the company look; Docs layout, Ajaia skin | Implemented |
+| D27 | Render: Docker web service + **Postgres** via a `render.yaml` Blueprint | The free tier has no persistent disk (SQLite would reset); one-click deploy | Implemented (deploy pending the user's Render account) |
+| D28 | FastAPI serves the built UI with an SPA fallback; API docs at `/api/docs` | One service and URL, no CORS; avoids the `/docs` route clash | Implemented |
