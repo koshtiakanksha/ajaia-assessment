@@ -80,6 +80,13 @@ Copy this template for each meaningful prompt or decision:
 - **Decision:** Safe to push. The one known gap is that there is **no authentication yet**, which is intentional at this stage and documented. It blocks a public deployment, not a push of the source code.
 - **Result:** The repo is ready for its first commit and push.
 
+### #5: Publish to GitHub
+- **Date:** 2026-11-22
+- **Prompt:** "Let's make it public and push it to my GitHub."
+- **AI output:** Made the initial commit (29 files) and confirmed again that no env, database, venv, `node_modules`, or key files were tracked. `gh` wasn't installed, so I installed it with Homebrew. The user signed in with `gh auth login` in the VS Code terminal, because the `!` shortcut in the chat panel sent the text as a message instead of running it. Then I ran `gh repo create ajaia-assessment --public --source=. --push`.
+- **Decision:** Public repo, default branch `main`.
+- **Result:** https://github.com/koshtiakanksha/ajaia-assessment. `main` tracks `origin/main`.
+
 ---
 
 ## Key decisions (running summary)
